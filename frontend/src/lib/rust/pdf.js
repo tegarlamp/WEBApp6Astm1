@@ -1,6 +1,6 @@
 import { fileUrl, imageToDataUri } from "@/lib/kht/api";
 import { fmtDate, fmtDateTime } from "@/lib/kht/format";
-import { METHOD_INFO, gradeSpecFor, renderCalcFigure, renderCompareFigure, renderOverlay } from "@/lib/rust/figure";
+import { METHOD_INFO, gradeSpecFor, renderCalcFigure, renderOverlay } from "@/lib/rust/figure";
 
 export { printHtmlOnWeb } from "@/lib/kht/pdf";
 
@@ -63,56 +63,43 @@ function verdictCard(key, n, extra, testId) {
   return `<div class="verdict" style="border-color:${s.color}88;background:${s.color}10" data-testid="${testId}"><div class="k">${esc(key)}</div><div class="g" style="color:${gradeTxtColor(s.color)}">Grade ${s.g}</div><div class="n">${n} / 100 kotak berkarat</div><div class="s">${esc(s.status)} · ${esc(s.label)}${extra ? `<br/>${esc(extra)}` : ""}</div></div>`;
 }
 
-/** Prepare every image (photo + figures) for one record. */
 const methodOf = (rec) => (rec.method === "full" ? "full" : "zone");
-const otherMethod = (m) => (m === "full" ? "zone" : "full");
 
-async function methodFigures(photo, snap, method) {
-  const aiBoxes = snap.ai_grid_boxes || snap.grid_boxes || [];
-  let overlayFull = null; let overlayZoom = null; let estimated = method !== "full" && !snap.grid_corners;
+async function methodFigures(photo, rec, method) {
+  const boxes = rec.grid_boxes || [];
+  const label = "PENILAIAN INSPECTOR";
+  let overlayFull = null; let overlayZoom = null; let estimated = method !== "full" && !rec.grid_corners;
   try {
-    const full = await renderOverlay(photo, snap.grid_corners, aiBoxes, { zoom: false, maxW: 1400, method });
+    const full = await renderOverlay(photo, rec.grid_corners, boxes, { zoom: false, maxW: 1400, method, label });
     overlayFull = full.dataUrl; estimated = full.estimated;
-    if (method !== "full") overlayZoom = (await renderOverlay(photo, snap.grid_corners, aiBoxes, { zoom: true, method })).dataUrl;
+    if (method !== "full") overlayZoom = (await renderOverlay(photo, rec.grid_corners, boxes, { zoom: true, method, label })).dataUrl;
   } catch { /* photo could not be drawn — keep plain photo only */ }
-  return { overlayFull, overlayZoom, estimated, calc: renderCalcFigure(aiBoxes, { method }) };
+  return { overlayFull, overlayZoom, estimated, calc: renderCalcFigure(boxes, { method, title: `PERHITUNGAN · ASTM D1748 · METODE ${method === "full" ? "SELURUH GAMBAR" : "ACTIVE ZONE 50×50 mm"} · PENILAIAN INSPECTOR` }) };
 }
 
 export async function prepareRustAssets(rec) {
   const url = fileUrl(rec.image_path, 1600);
   const photo = (await imageToDataUri(url)) || url;
-  const m = methodOf(rec);
-  const main = await methodFigures(photo, rec, m);
-  const otherSnap = rec.method_results?.[otherMethod(m)];
-  const other = otherSnap ? await methodFigures(photo, otherSnap, otherMethod(m)) : null;
-  const compare = renderCompareFigure(rec.ai_grid_boxes || rec.grid_boxes || [], rec.grid_boxes || []);
-  return { photo, ...main, other, compare };
+  return { photo, ...(await methodFigures(photo, rec, methodOf(rec))) };
 }
 
 function overlayBlock(F, method) {
   if (!F.overlayFull) return `<div class="caption">Overlay tidak dapat dibuat untuk foto ini.</div>`;
   if (method === "full") {
-    return `<div class="fig"><img src="${esc(F.overlayFull)}" alt="overlay seluruh gambar" style="max-height:360px"/><div class="caption">Metode Seluruh Gambar: seluruh foto = active zone, dibagi rata 10×10 (tiap kotak 10% lebar × 10% tinggi). Kotak merah bernomor = karat terdeteksi AI.</div></div>`;
+    return `<div class="fig"><img src="${esc(F.overlayFull)}" alt="overlay seluruh gambar" style="max-height:360px"/><div class="caption">Metode Seluruh Gambar: seluruh foto = active zone, dibagi rata 10×10 (tiap kotak 10% lebar × 10% tinggi). Kotak merah bernomor = kotak berkarat (penilaian inspector).</div></div>`;
   }
   return `<div class="two">
       <div class="fig"><img src="${esc(F.overlayFull)}" alt="overlay"/><div class="caption">Zona ukur 50×50 mm (garis oranye) pada foto asli</div></div>
-      <div class="fig"><img src="${esc(F.overlayZoom)}" alt="overlay zoom"/><div class="caption">Detail zona: kotak merah bernomor = karat terdeteksi AI</div></div>
-    </div>${F.estimated ? `<div class="caption" style="color:#b45309">Catatan: posisi grid belum dideteksi AI untuk foto ini, overlay memakai estimasi seluruh area foto.</div>` : ""}`;
+      <div class="fig"><img src="${esc(F.overlayZoom)}" alt="overlay zoom"/><div class="caption">Detail zona: kotak merah bernomor = kotak berkarat (penilaian inspector)</div></div>
+    </div>${F.estimated ? `<div class="caption" style="color:#b45309">Catatan: posisi grid belum dideteksi untuk foto ini, overlay memakai estimasi seluruh area foto.</div>` : ""}`;
 }
 
 function renderRecordPages(rec, A, index, total) {
   const tag = index && total ? ` · SAMPLE ${index}/${total}` : "";
-  const aiN = rec.ai_rusted_box_count ?? cnt(rec.ai_grid_boxes || rec.grid_boxes);
-  const corrN = cnt(rec.grid_boxes);
-  const manualN = rec.inspector_count ?? null;
-  const finalN = manualN ?? corrN;
+  const finalN = cnt(rec.grid_boxes);
   const final = gradeSpecFor(finalN);
-  const corrected = corrN !== aiN || JSON.stringify(rec.grid_boxes) !== JSON.stringify(rec.ai_grid_boxes);
   const m = rec.meta || {};
   const meth = methodOf(rec); const mLabel = METHOD_INFO[meth].label;
-  const oth = otherMethod(meth); const othSnap = rec.method_results?.[oth];
-  const othN = othSnap ? (othSnap.ai_rusted_box_count ?? cnt(othSnap.ai_grid_boxes || othSnap.grid_boxes)) : null;
-  const diff = (n) => (n === null || n === undefined ? "—" : n - aiN === 0 ? "0" : `${n - aiN > 0 ? "+" : ""}${n - aiN}`);
   const header = (title) => `
     <div class="head">
       <div><div class="sub">RUST PREVENTING · ASTM D1748${tag}</div><h1>${esc(m.sample_id || "—")} — ${esc(title)}</h1></div>
@@ -123,24 +110,18 @@ function renderRecordPages(rec, A, index, total) {
   const page1 = `
   <div class="page" data-testid="rust-pdf-page-summary">
     ${header("Laporan Inspeksi")}
-    <div class="verdicts">
-      ${verdictCard(`AI Vision · ${mLabel}`, aiN, `Confidence ${Number(rec.confidence || 0).toFixed(0)}% · ${rec.ai_model || ""}`, "rust-pdf-verdict-ai")}
-      ${verdictCard("Koreksi Grid Inspector", corrN, corrected ? "Grid dikoreksi manual" : "Sama dengan hasil AI", "rust-pdf-verdict-grid")}
-      ${verdictCard("Penilaian Manual Inspector", manualN, manualN === null ? "" : rec.inspector_name ? `oleh ${rec.inspector_name}` : "", "rust-pdf-verdict-manual")}
+    <div class="verdicts" style="grid-template-columns:1fr">
+      ${verdictCard("Penilaian Inspector", finalN, rec.inspector_name ? `oleh ${rec.inspector_name}` : "", "rust-pdf-verdict-inspector")}
     </div>
     <h2>Foto Panel yang Diunggah</h2>
     <div class="photo"><img src="${esc(A.photo)}" alt="foto panel"/><div class="caption">Foto asli inspeksi — ${esc(m.sample_id || "—")} (tanpa overlay)</div></div>
     <h2>Ringkasan Penilaian</h2>
     <table class="t">
-      <thead><tr><th>Metode</th><th>Kotak berkarat</th><th>Luas</th><th>Grade</th><th>Status</th><th>Selisih vs AI</th></tr></thead>
+      <thead><tr><th>Penilaian</th><th>Kotak berkarat</th><th>Luas</th><th>Grade</th><th>Status</th></tr></thead>
       <tbody>
-        <tr><td>AI Vision · ${esc(mLabel)} <b>(resmi)</b></td><td>${aiN}/100</td><td>${aiN}%</td><td><b>${gradeSpecFor(aiN).g}</b></td><td>${esc(gradeSpecFor(aiN).status)}</td><td>—</td></tr>
-        <tr><td>Koreksi Grid Inspector</td><td>${corrN}/100</td><td>${corrN}%</td><td><b>${gradeSpecFor(corrN).g}</b></td><td>${esc(gradeSpecFor(corrN).status)}</td><td>${diff(corrN)}</td></tr>
-        <tr><td>Penilaian Manual Inspector</td><td>${manualN === null ? "—" : `${manualN}/100`}</td><td>${manualN === null ? "—" : `${manualN}%`}</td><td><b>${manualN === null ? "—" : gradeSpecFor(manualN).g}</b></td><td>${manualN === null ? "—" : esc(gradeSpecFor(manualN).status)}</td><td>${diff(manualN)}</td></tr>
-        ${othSnap ? `<tr data-testid="rust-pdf-row-other-method"><td>AI Vision · ${esc(METHOD_INFO[oth].label)} (pembanding)</td><td>${othN}/100</td><td>${othN}%</td><td><b>${gradeSpecFor(othN).g}</b></td><td>${esc(gradeSpecFor(othN).status)}</td><td>${diff(othN)}</td></tr>` : ""}
+        <tr data-testid="rust-pdf-row-inspector"><td>Penilaian Inspector</td><td>${finalN}/100</td><td>${finalN}%</td><td><b>${final.g}</b></td><td>${esc(final.status)}</td></tr>
       </tbody>
     </table>
-    <div class="caption">Metode resmi: ${esc(mLabel)}. Grade akhir = penilaian manual inspector bila diisi; jika tidak, hasil koreksi grid. Kesesuaian grid AI vs inspector: ${A.compare.agree}%.</div>
     <div class="card"><b>Test Information</b><div class="meta" style="margin-top:4px">
       <div><span>Product / Oil</span>${esc(m.product || "—")}</div><div><span>Batch / Lot</span>${esc(m.batch || "—")}</div>
       <div><span>Exposure</span>${esc(m.exposure_hours)}h @ ${esc(m.temperature_c)}&deg;C</div><div><span>Humidity</span>${esc(m.humidity_pct)}% RH</div>
@@ -151,44 +132,24 @@ function renderRecordPages(rec, A, index, total) {
 
   const page2 = `
   <div class="page" data-testid="rust-pdf-page-calc">
-    ${header(`Detail Perhitungan AI · ${mLabel}`)}
+    ${header(`Detail Perhitungan · ${mLabel}`)}
     <h2>1 · Pemetaan grid 100 kotak pada ${meth === "full" ? "seluruh foto" : "zona 50×50 mm"}</h2>
     ${overlayBlock(A, meth)}
     <h2>2 · Matriks perhitungan &amp; penentuan grade</h2>
     <div class="fig"><img src="${esc(A.calc)}" alt="perhitungan"/></div>
-    <h2>3 · Perbandingan AI Vision vs Inspector</h2>
-    <div class="fig"><img src="${esc(A.compare.dataUrl)}" alt="perbandingan"/></div>
   </div>`;
-
-  const pageOther = othSnap && A.other ? `
-  <div class="page" data-testid="rust-pdf-page-other-method">
-    ${header(`Metode Pembanding · ${METHOD_INFO[oth].label}`)}
-    <div class="verdicts" style="grid-template-columns:1fr 1fr">
-      ${verdictCard(`AI Vision · ${mLabel} (resmi)`, aiN, "", "rust-pdf-verdict-main-method")}
-      ${verdictCard(`AI Vision · ${METHOD_INFO[oth].label} (pembanding)`, othN, `Confidence ${Number(othSnap.confidence || 0).toFixed(0)}%`, "rust-pdf-verdict-other-method")}
-    </div>
-    <h2>1 · Pemetaan grid 100 kotak pada ${oth === "full" ? "seluruh foto" : "zona 50×50 mm"}</h2>
-    ${overlayBlock(A.other, oth)}
-    <h2>2 · Matriks perhitungan &amp; penentuan grade</h2>
-    <div class="fig"><img src="${esc(A.other.calc)}" alt="perhitungan pembanding"/></div>
-    <div class="card"><b>Catatan AI (${esc(METHOD_INFO[oth].label)})</b><p>${esc(othSnap.ai_summary || "—")}</p></div>
-  </div>` : "";
 
   const page3 = `
   <div class="page" data-testid="rust-pdf-page-notes">
     ${header("Catatan & Pengesahan")}
-    <div class="card"><b>Catatan Analisis AI Vision</b><p>${esc(rec.ai_summary || "—")}</p></div>
-    <div class="card"><b>Rekomendasi AI</b><p>${esc(rec.recommendation || "—")}</p></div>
-    <div class="card"><b>Penilaian Manual Inspector</b>
-      <p>${manualN === null ? "Inspector belum mengisi penilaian manual." : `${manualN}/100 kotak berkarat → Grade ${gradeSpecFor(manualN).g} (${esc(gradeSpecFor(manualN).status)})${rec.inspector_name ? ` — ${esc(rec.inspector_name)}` : ""}${rec.inspector_at ? `, ${esc(fmtDateTime(rec.inspector_at))}` : ""}`}</p>
-      <p>${esc(rec.inspector_notes || "")}</p></div>
     <div class="card"><b>Kriteria Grade ASTM D1748 (100 kotak)</b>
+      <p>Hasil penilaian inspector: ${finalN}/100 kotak berkarat → Grade ${final.g} (${esc(final.status)})</p>
       <table class="t"><thead><tr><th>Grade</th><th>Kotak berkarat</th><th>Status</th><th>Keterangan</th></tr></thead><tbody>
       ${["A", "B", "C", "D", "E"].map((g) => { const s = gradeSpecFor({ A: 0, B: 1, C: 11, D: 26, E: 51 }[g]); return `<tr style="${s.g === final.g ? "background:#FEF3C7;font-weight:700" : ""}"><td><span class="badge" style="background:${s.color}">${s.g}</span></td><td>${s.min === s.max ? s.min : `${s.min}–${s.max}`}</td><td>${esc(s.status)}</td><td>${esc(s.label)}</td></tr>`; }).join("")}
       </tbody></table></div>
     <div class="sign"><div>Inspector${rec.inspector_name ? ` — ${esc(rec.inspector_name)}` : ""}</div><div>Supervisor / Approver</div></div>
   </div>`;
-  return page1 + page2 + pageOther + page3;
+  return page1 + page2 + page3;
 }
 
 export async function buildRustSingleHtml(rec) {
