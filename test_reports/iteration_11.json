@@ -1,0 +1,35 @@
+{
+  "iteration": 11,
+  "summary": "Frontend-only verification of the new 'click photo to toggle rust box' feature on the Rust Preventing ASTM D1748 Result page (OverlayCard.clickPhoto + figure.js hitBox). Tested seeded demo record RUST-DEMO-079 (id cb4b0d7f-ef86-42b9-a0ad-ce84282d87f4, method=full, 79/100, Grade E). Every expected behavior passed: (1) tab SELURUH FOTO shows RESMI badge; (2) clicking the overlay photo at box 51 and box 61 positions toggles those boxes off, auto-switches rust-overlay-view from AI to KOREKSI, and live indicators (rust-overlay-live-count=77/100, rust-overlay-live-grade=E) + top summary (rust-result-count=77, rust-result-grade=E) update in sync; (3) grade transitions follow ASTM D1748 thresholds exactly as count decreases via rust-grid-box-N clicks — 50/D at count 50, 25/C at count 25, 10/B at count 10, 0/A at count 0; (4) clicking a clean box on the photo (box 1) adds it back as rusted (count went 0 -> 1); (5) RESET KE AI restores exactly 79/E; (6) SIMPAN KOREKSI (rust-overlay-save) persists after reload — reloaded page showed KOREKSI GRID verdict 78/100 · E while AI VISION · SELURUH FOTO verdict still read 79/100 · E (AI original preserved); (7) seed restored at the end via RESET KE AI + SIMPAN KOREKSI GRID -> post-reload 79/E. Footer legend (bottom 54px of overlay image) correctly treated as outside the grid — hitBox returns -1 there (verified indirectly: no stray toggles observed when clicking inside grid area only). No console errors.",
+  "passed": 11,
+  "failed": 0,
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "checks": [
+    {"name": "initial_state_79_E", "status": "passed", "evidence": "rust-result-count=79, rust-result-grade=E, rust-result-ai-original='79/100 · E'"},
+    {"name": "full_method_tab_is_official", "status": "passed", "evidence": "rust-method-official-full badge RESMI present"},
+    {"name": "photo_click_toggle_box51_box61", "status": "passed", "evidence": "After 2 clicks at computed box 51/61 centers: live=77/100, grade=E, top=77/E; view auto-switched to KOREKSI (rust-overlay-view-corr has bg-amber-500)"},
+    {"name": "threshold_D_at_count_50", "status": "passed", "evidence": "After reducing to 50: rust-result-grade=D"},
+    {"name": "threshold_C_at_count_25", "status": "passed"},
+    {"name": "threshold_B_at_count_10", "status": "passed"},
+    {"name": "threshold_A_at_count_0", "status": "passed"},
+    {"name": "photo_click_adds_clean_box_back", "status": "passed", "evidence": "After clicking clean box 1 position on photo: count went 0 -> 1"},
+    {"name": "reset_ke_ai_restores_79", "status": "passed", "evidence": "RESET KE AI -> 79/E"},
+    {"name": "simpan_koreksi_persists_after_reload", "status": "passed", "evidence": "Toggled box 51 off -> SIMPAN KOREKSI -> reload: KOREKSI GRID verdict '78/100 · E', AI VISION verdict preserved at '79/100 · E'"},
+    {"name": "seed_restored_79_E", "status": "passed", "evidence": "Final RESET KE AI + save -> post-reload count=79 grade=E"}
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "renderOverlay returns geom.h = ch + footer, but hitBox only hits inside the quad which (for method=full) is 0..ch — correct, footer is implicitly excluded. For method=zone with cropped zoom, the quad is scaled inside the image and the dim-outside overlay plus hitBox's inPoly keep clicks outside the measuring zone as no-ops. Behavior is correct.",
+    "OverlayCard.clickPhoto guards non-official methods with a toast and does not call onToggle — safe. For an un-analyzed method, snap is undefined and function returns early.",
+    "Minor: Result.jsx is now ~325 lines with 3 subcomponents (OverlayCard, InspectorCard, MethodDetail). Still readable, but splitting OverlayCard into its own file would help future maintenance."
+  ],
+  "updated_files": [],
+  "success_rate": {"frontend": "100%"},
+  "test_credentials": "admin / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "No new seed. Mutated the seeded record RUST-DEMO-079 temporarily during the SIMPAN KOREKSI persistence test, then restored to the AI baseline (first 79 boxes true, grade E) via RESET KE AI + SIMPAN KOREKSI GRID. Verified post-reload the record is back to 79/E.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Rust overlay click-to-toggle feature is fully functional. Seeded demo id cb4b0d7f-ef86-42b9-a0ad-ce84282d87f4 is at AI baseline 79/E. For future UI tests: pos(idx) requires reading [data-testid=rust-overlay-image].naturalHeight and subtracting 54px footer; click Y = top + ((row+0.5)/10) * (ch/nh) * rendered_height. Login admin/admin123, go to /rust-preventing/result/{id}, click rust-method-tab-full, wait ~1.5s for overlay re-render before clicking. AI endpoints still off due to LLM budget — do not call rust-method-analyze."
+}
