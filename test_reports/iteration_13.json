@@ -1,0 +1,34 @@
+{
+  "summary": "Verified Emergent LLM key fix (previous key had 0 budget → 429). After switching EMERGENT_LLM_KEY, ran end-to-end AI Vision tests on all 4 modules (K-HTT, DKA, Copper, Rust D1748) and OCR tests on 2 modules (HTCBT ASTM D6594, DKA-CEC L-48-A-00) via pytest hitting the public preview URL. All 6 pytest cases PASS (upload → analyze/ocr start → job polling → status=done, no 429 / no 502 / no budget error). Also ran a UI flow for Rust Preventing new inspection: uploaded /app/tests/fixtures/plain_test.jpg → clicked RUN ASTM D1748 AI (Zone 50x50) → navigated to /rust-preventing/result/<id> successfully (record 9dce26e8-dc14-46a7-a483-88f3877ada72 created), no error toast. HTCBT OCR UI flow: upload succeeded, OCR job ran without error toast; sample_code field remained empty because the fixture image contains no readable handwritten label (expected — plain_test.jpg is a synthetic image). Backend logs show healthy gemini-3.1-pro-preview calls, zero 429/budget/quota entries.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_ai_vision_ocr.py",
+    "/app/test_reports/pytest/ai_vision_ocr.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "/app/backend/server.py is 4096 lines — exceeds the 700-line guideline. Recommend splitting into per-module routers (kht.py, dka.py, copper.py, rust.py, htcbt.py, dkacec.py) and a shared llm.py / storage.py. Not blocking current fix but increases risk of regression as modules grow.",
+    "LLM calls are repeated with similar LlmChat(...).with_model('gemini', 'gemini-3.1-pro-preview') boilerplate across ~8 places — candidate for a thin factory helper (reduces drift when model name or key sourcing changes)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_ai_vision_ocr.py"
+  ],
+  "success_rate": {
+    "backend": "100% (6/6)",
+    "frontend": "100% on Rust AI Vision upload→result; HTCBT OCR UI loads+runs without error (empty parse expected for synthetic fixture)"
+  },
+  "test_credentials": "admin / admin123",
+  "seed_data_creation": "Created transient AI records with TEST_ prefix sample_ids (TEST_KHT_AI, TEST_DKA_AI, TEST_COP_AI, TEST_RUST_AI) and one UI-created Rust record 9dce26e8-dc14-46a7-a483-88f3877ada72. Not cleaned up (small set, harmless, filterable by TEST_ prefix). Pre-existing seed RUST-DEMO-079 was not touched.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "AI Vision + OCR are fully operational on the current EMERGENT_LLM_KEY. Reusable pytest at /app/backend/tests/test_ai_vision_ocr.py runs ~50s with xdist (2 workers). For UI retest, Rust flow: /rust-preventing/new → set_input_files on [data-testid=rust-gallery-input] → click [data-testid=rust-run-analysis] → wait_for_url **/rust-preventing/result/**. HTCBT OCR UI uses [data-testid=htcbt-gallery-input]; use a real handwritten-label photo (e.g. /app/tests/fixtures/dka_iphone.heic) if you want non-empty sample codes.",
+  "rca of the issue": "Previous EMERGENT_LLM_KEY had its billing budget exceeded → every LLM call returned 429 'Budget exceeded', which emergentintegrations surfaced as 502 'AI Vision analysis failed' from friendly_ai_error. Mitigation applied by main agent: switched EMERGENT_LLM_KEY in backend/.env to the user's own funded key (from .env-backup). This test iteration confirms all 6 AI/OCR endpoints now return status=done without 429/502/budget errors."
+}
