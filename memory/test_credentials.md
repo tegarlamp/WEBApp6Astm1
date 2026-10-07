@@ -24,3 +24,7 @@ Hash aktif di .env terverifikasi untuk password `admin123`.
 - Di-import dari github.com/karismswzet-tech/WebApplandingpageIn6appnew.
 - .env dipulihkan via scripts/restore_env.sh; REACT_APP_BACKEND_URL di-set ke preview pod baru; EMERGENT_LLM_KEY diganti key pod ini.
 - Login admin/admin123 terverifikasi.
+
+## Re-import (2026-06) dari github.com/karismswzet-tech/WEBApp6Astm
+- backend/.env: ADMIN_* dipulihkan dari .env-backup; EMERGENT_LLM_KEY = key pod ini; DB_NAME tetap test_database.
+- Login admin/admin123 terverifikasi.
