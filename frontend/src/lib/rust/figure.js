@@ -126,7 +126,23 @@ export async function renderOverlay(src, corners, boxes, { zoom: zoomIn = false,
   ctx.fillText(`${label}: ${n}/100 kotak → Grade ${spec.g}`, 30, ch + 17);
   ctx.font = `${fs - 3}px Arial`; ctx.fillStyle = "#00D2D3";
   ctx.fillText(full ? "Metode seluruh gambar: grid 10×10 menutup 100% foto" : estimated ? "Posisi grid estimasi (belum dideteksi AI)" : "Grid 10×10 (zona 50×50 mm) dipetakan AI", 10, ch + 40);
-  return { dataUrl: canvas.toDataURL("image/jpeg", 0.9), estimated };
+  return { dataUrl: canvas.toDataURL("image/jpeg", 0.9), estimated, geom: { quad: c, w: cw, h: canvas.height } };
+}
+
+const inPoly = (pts, x, y) => pts.reduce((inside, [xi, yi], i) => {
+  const [xj, yj] = pts[(i + pts.length - 1) % pts.length];
+  return ((yi > y) !== (yj > y)) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi ? !inside : inside;
+}, false);
+
+// Returns the 0-based box index under canvas point (x, y), or -1.
+export function hitBox(geom, x, y) {
+  const c = geom.quad;
+  for (let i = 0; i < 100; i += 1) {
+    const r = Math.floor(i / 10); const col = i % 10;
+    const q = [bilerp(c, col / 10, r / 10), bilerp(c, (col + 1) / 10, r / 10), bilerp(c, (col + 1) / 10, (r + 1) / 10), bilerp(c, col / 10, (r + 1) / 10)];
+    if (inPoly(q, x, y)) return i;
+  }
+  return -1;
 }
 
 function drawMatrix(ctx, x0, y0, cell, boxes, { sums = true, colorFor } = {}) {

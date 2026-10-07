@@ -7,7 +7,7 @@ import RustGrid from "@/components/rust/Grid";
 import { Card, InfoRow } from "@/components/kht/ui";
 import { fileUrl, imageToDataUri } from "@/lib/kht/api";
 import { fmtDateTime } from "@/lib/kht/format";
-import { METHOD_INFO, renderCalcFigure, renderOverlay } from "@/lib/rust/figure";
+import { METHOD_INFO, hitBox, renderCalcFigure, renderOverlay } from "@/lib/rust/figure";
 import { buildRustSingleHtml, printHtmlOnWeb } from "@/lib/rust/pdf";
 
 const Label = ({ children, right }) => (
@@ -53,7 +53,7 @@ function MethodDetail({ snap, method, official, boxesForCalc }) {
   );
 }
 
-function OverlayCard({ data, boxes }) {
+function OverlayCard({ data, boxes, onToggle, onSave, dirty, saving }) {
   const locate = useLocateRustGrid();
   const switcher = useSwitchRustMethod();
   const [stage, setStage] = useState("");
@@ -63,6 +63,7 @@ function OverlayCard({ data, boxes }) {
   const [view, setView] = useState("ai");
   const [zoom, setZoom] = useState("zoom");
   const [img, setImg] = useState(null);
+  const [geom, setGeom] = useState(null);
   const [estimated, setEstimated] = useState(false);
   useEffect(() => { setViewMethod(data.method || "zone"); }, [data.method]);
 
@@ -86,7 +87,7 @@ function OverlayCard({ data, boxes }) {
     if (!photo) return undefined;
     let alive = true;
     renderOverlay(photo, snap?.grid_corners, srcBoxes, { zoom: zoom === "zoom", method: viewMethod, label: !snap ? "BELUM DIANALISA" : view === "ai" ? "AI VISION" : "KOREKSI" })
-      .then((r) => { if (alive) { setImg(r.dataUrl); setEstimated(r.estimated); } })
+      .then((r) => { if (alive) { setImg(r.dataUrl); setGeom(r.geom); setEstimated(r.estimated); } })
       .catch(() => alive && setImg(null));
     return () => { alive = false; };
   }, [photo, snap, srcBoxes, zoom, view, viewMethod]);
@@ -106,6 +107,17 @@ function OverlayCard({ data, boxes }) {
     try { await locate.mutateAsync(data.id); toast.success("Posisi zona 50×50 mm terdeteksi AI."); }
     catch (e) { toast.error(String(e?.message || "Deteksi grid gagal").slice(0, 140)); }
   }
+  function clickPhoto(e) {
+    if (!geom || !snap) return;
+    if (!official) { toast.info("Jadikan metode ini hasil resmi dulu untuk mengoreksi kotak."); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    const idx = hitBox(geom, ((e.clientX - rect.left) / rect.width) * geom.w, ((e.clientY - rect.top) / rect.height) * geom.h);
+    if (idx < 0) return;
+    if (view !== "corr") setView("corr");
+    onToggle(idx);
+  }
+  const corrN = boxes.filter(Boolean).length;
+  const corrG = gradeForCount(corrN);
   const busy = analyze.isPending || switcher.isPending;
   const btn = "flex items-center gap-2 rounded-md px-3 py-2 font-mono text-[11px] font-bold tracking-widest disabled:opacity-50";
 
@@ -134,8 +146,16 @@ function OverlayCard({ data, boxes }) {
       </div>
 
       <div className="flex min-h-[220px] items-center justify-center overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950" data-testid="rust-overlay-wrap">
-        {img ? <img src={img} alt="overlay grid ASTM D1748" className="max-h-[520px] w-full object-contain" data-testid="rust-overlay-image" /> : <Loader2 className="h-6 w-6 animate-spin text-amber-400" />}
+        {img ? <img src={img} alt="overlay grid ASTM D1748" onClick={clickPhoto} className={`max-h-[520px] max-w-full ${snap && official ? "cursor-crosshair" : ""}`} data-testid="rust-overlay-image" /> : <Loader2 className="h-6 w-6 animate-spin text-amber-400" />}
       </div>
+      {snap && official && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-red-500/40 bg-red-500/10 p-2" data-testid="rust-overlay-edit-bar">
+          <span className="font-mono text-[11px] text-zinc-200">Klik kotak pada foto untuk menghapus/menambah kotak merah · <b data-testid="rust-overlay-live-count">{corrN}/100</b> · Grade <b style={{ color: RUST_GRADES[corrG].color }} data-testid="rust-overlay-live-grade">{corrG}</b></span>
+          <button type="button" onClick={onSave} disabled={!dirty || saving} data-testid="rust-overlay-save" className={`${btn} bg-amber-500 text-zinc-950 hover:bg-amber-400`}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}SIMPAN KOREKSI
+          </button>
+        </div>
+      )}
       <div className="mt-2 font-mono text-[10px] text-zinc-500">{METHOD_INFO[viewMethod].desc}</div>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
@@ -242,8 +262,11 @@ export default function RustResult() {
   useEffect(() => { if (data) setBoxes(data.grid_boxes || Array(100).fill(false)); }, [data]);
   if (isLoading) return <div className="flex justify-center py-24"><Loader2 className="h-6 w-6 animate-spin text-amber-400" /></div>;
   if (isError || !data) return <div className="py-24 text-center font-mono text-xs text-zinc-500" data-testid="rust-result-not-found">Inspection tidak ditemukan.</div>;
-  const grade = RUST_GRADES[data.grade] || RUST_GRADES.E;
   const count = boxes.filter(Boolean).length;
+  const liveGrade = gradeForCount(count);
+  const grade = RUST_GRADES[liveGrade];
+  const dirty = JSON.stringify(boxes) !== JSON.stringify(data.grid_boxes);
+  const toggleBox = (index) => setBoxes((prev) => prev.map((value, i) => (i === index ? !value : value)));
   const aiN = data.ai_rusted_box_count ?? data.rusted_box_count;
   const aiGrade = data.ai_grade || gradeForCount(aiN);
 
@@ -268,7 +291,7 @@ export default function RustResult() {
         </div>
         <div className="mt-2 font-mono text-[15px] font-bold text-zinc-50" data-testid="rust-result-sample-id">{data.meta.sample_id || "—"}</div>
         <div className="my-5 flex items-center justify-center gap-6">
-          <div className="text-center"><div className="font-heading text-7xl font-bold" style={{ color: grade.color }} data-testid="rust-result-grade">{data.grade}</div><div className="font-mono text-[10px] tracking-widest text-zinc-500">GRADE RATING</div></div>
+          <div className="text-center"><div className="font-heading text-7xl font-bold" style={{ color: grade.color }} data-testid="rust-result-grade">{liveGrade}</div><div className="font-mono text-[10px] tracking-widest text-zinc-500">GRADE RATING</div></div>
           <div className="h-20 w-px bg-zinc-700" />
           <div className="text-center"><div className="font-heading text-5xl font-bold text-zinc-50" data-testid="rust-result-count">{count}</div><div className="font-mono text-[10px] tracking-widest text-zinc-500">RUSTED / 100</div></div>
         </div>
@@ -280,13 +303,13 @@ export default function RustResult() {
         </div>
       </Card>
 
-      <OverlayCard data={data} boxes={boxes} />
+      <OverlayCard data={data} boxes={boxes} onToggle={toggleBox} onSave={saveGrid} dirty={dirty} saving={update.isPending} />
 
       <Card>
         <Label right={<span className="font-mono text-[10px] text-zinc-500">Klik kotak untuk audit/koreksi</span>}>AI GRID DETECTION · {METHOD_INFO[data.method || "zone"].short}</Label>
-        <RustGrid boxes={boxes} interactive onToggle={(index) => setBoxes((prev) => prev.map((value, i) => (i === index ? !value : value)))} />
+        <RustGrid boxes={boxes} interactive onToggle={toggleBox} />
         <div className="mt-3 flex gap-2">
-          <button type="button" onClick={saveGrid} disabled={update.isPending || JSON.stringify(boxes) === JSON.stringify(data.grid_boxes)} data-testid="rust-save-grid" className="flex flex-1 items-center justify-center gap-2 rounded-md bg-amber-500 py-3 font-mono text-xs font-bold tracking-widest text-zinc-950 hover:bg-amber-400 disabled:opacity-50"><Save className="h-4 w-4" />{update.isPending ? "MENYIMPAN…" : "SIMPAN KOREKSI GRID"}</button>
+          <button type="button" onClick={saveGrid} disabled={update.isPending || !dirty} data-testid="rust-save-grid" className="flex flex-1 items-center justify-center gap-2 rounded-md bg-amber-500 py-3 font-mono text-xs font-bold tracking-widest text-zinc-950 hover:bg-amber-400 disabled:opacity-50"><Save className="h-4 w-4" />{update.isPending ? "MENYIMPAN…" : "SIMPAN KOREKSI GRID"}</button>
           <button type="button" onClick={resetToAi} data-testid="rust-reset-grid-ai" className="rounded-md border border-zinc-700 px-3 font-mono text-[11px] text-zinc-300 hover:bg-zinc-800">RESET KE AI</button>
         </div>
       </Card>
