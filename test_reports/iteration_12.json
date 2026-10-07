@@ -1,0 +1,29 @@
+{
+  "summary": "Verified simplified Rust ASTM D1748 single-record EXPORT PDF per Indonesian user spec. Captured generated HTML via window.__lastReportHtml hook in printHtmlOnWeb (iframe). All 32 structural/content assertions passed on seeded record RUST-DEMO-079 (cb4b0d7f-ef86-42b9-a0ad-ce84282d87f4, 69/100 → Grade E). Also verified reactivity: after PUT grid_boxes=50 → PDF reflected 50/100 Grade D; seed restored to 69/E afterwards.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verifications": {
+    "page1_rust-pdf-page-summary": "present with exactly 1 verdict card rust-pdf-verdict-inspector showing 'Penilaian Inspector', 'Grade E', '69 / 100 kotak berkarat'. Foto Panel yang Diunggah shown (original photo, no overlay). Ringkasan Penilaian table has exactly 1 row rust-pdf-row-inspector (69/100, 69%, E). Test Information card present. ABSENT strings confirmed: 'Manual', 'Koreksi Grid', 'pembanding'/'Pembanding', 'Kesesuaian', 'Metode resmi', 'Perbandingan AI Vision', 'Catatan Analisis', 'Rekomendasi AI', 'Penilaian Manual Inspector'.",
+    "page2_rust-pdf-page-calc": "present with sections '1 · Pemetaan grid 100 kotak' (overlay reflecting saved grid 69, grade E in overlay legend) and '2 · Matriks perhitungan & penentuan grade' (calc figure from saved grid). No 'Perbandingan AI Vision vs Inspector' section. No rust-pdf-page-other-method page emitted.",
+    "page3_rust-pdf-page-notes": "present with only 'Kriteria Grade ASTM D1748 (100 kotak)' table (row E highlighted via yellow bg + bold), inspector result line '69/100 kotak berkarat → Grade E', and signature lines (Inspector / Supervisor / Approver). No AI notes / recommendation / manual inspector sections.",
+    "total_pages": "Exactly 3 pages emitted (summary, calc, notes).",
+    "reactivity": "PUT /api/rust/tests/{id} with 50 rusted boxes → re-exported PDF showed '50 / 100 kotak berkarat', 'Grade D', row '50/100', notes '50/100 ... Grade D'. 69 no longer present. Seed restored to 69 (boxes 11..79 true) → grade E confirmed."
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "pdf.js renderRecordPages: header still prints 'GRADE AKHIR X' badge — not explicitly requested removed; retained and consistent with Grade E/D. No action.",
+    "pdf.js uses iframe + window.__lastReportHtml debug hook (good for testing). Preserved."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100% (32/32 assertions)"},
+  "test_credentials": "admin / admin123",
+  "seed_data_creation": "No new seeds; existing seed RUST-DEMO-079 used and restored to grid_boxes [11..79]=true (69/100, Grade E) after mutation test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Simplified single-record Rust PDF is correct per spec. If re-testing, use window.__lastReportHtml after clicking rust-export-pdf; printHtmlOnWeb opens an iframe (data-testid pdf-print-frame) and stores HTML on window. Override window.print before click to avoid print dialog. Combined (History) PDF cover was intentionally not changed per user note."
+}

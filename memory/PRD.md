@@ -239,3 +239,4 @@ Testing agent iteration_6.json: 20/20 pass. Confirmed: login sets HttpOnly cooki
 ## Re-import 2026-06
 - Imported from github.com/karismswzet-tech/WEBApp6Astm.git into new pod; env restored, deps installed (jspdf, pillow-heif, emergentintegrations). Smoke test 39/39 backend + all 6 module UIs pass.
 - 2026-06: Rust D1748 Result — kotak pada foto overlay "PETA GRID PADA FOTO" bisa diklik manual (toggle karat), count & grade ASTM D1748 update live, tombol SIMPAN KOREKSI. Demo record RUST-DEMO-079 di-seed (AI budget habis).
+- 2026-06: Export PDF Rust disederhanakan — hanya 'Penilaian Inspector' (dari grid tersimpan), tanpa AI/pembanding/manual/perbandingan; overlay & matriks mengikuti grid inspector.
