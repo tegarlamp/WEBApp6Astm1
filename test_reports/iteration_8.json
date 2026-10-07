@@ -1,0 +1,57 @@
+{
+  "iteration": 8,
+  "summary": "End-to-end verification of the enhanced Rust Preventing ASTM D1748 feature: new backend fields (ai_grid_boxes/ai_rusted_box_count/ai_grade frozen AI verdict, grid_corners, inspector_count/grade/name/notes/at), PUT preservation of AI verdict, inspector grade mapping (A/B/C/D/E boundaries + clamp + -1 clear), locate-grid 404 path, Result page UI (verdict boxes, overlay card toggles, inspector card), Export PDF (window.__lastReportHtml hook: 3 pages summary/calc/notes, 3 verdict cards, data-URI images), and History combined export (cover + per-sample summary/calc/notes pages). 30/30 pytest cases passed. All 17 Result page data-testids present. Combined-export HTML built correctly for 2 selected samples (~1MB, 2 summary + 2 calc + 2 notes pages + cover). No console or page errors. The user's real record 767e5224-0d18-4141-a269-7e932c23c7dc was not modified. The non-user record fe712a44 (used for mutate tests) was restored (grid_boxes=ai_grid_boxes, inspector cleared and name/notes emptied).",
+  "passed": 30,
+  "failed": 0,
+  "skipped": 0,
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "checks": [
+    {"name": "rust_dashboard_requires_auth_401", "lane": "backend", "status": "passed"},
+    {"name": "rust_tests_requires_auth_401", "lane": "backend", "status": "passed"},
+    {"name": "rust_dashboard_shape", "lane": "backend", "status": "passed"},
+    {"name": "rust_tests_list", "lane": "backend", "status": "passed"},
+    {"name": "rust_trend_list", "lane": "backend", "status": "passed"},
+    {"name": "rust_reference_scale_boundaries", "lane": "backend", "status": "passed"},
+    {"name": "rust_get_returns_new_fields_including_ai_frozen_and_inspector_and_grid_corners", "lane": "backend", "status": "passed", "evidence": "GET /api/rust/tests/{id} includes ai_grid_boxes(len=100), ai_rusted_box_count(int), ai_grade(A..E), grid_corners, inspector_count/grade/name/notes/at. Legacy records auto-filled via RustRecord model_validator."},
+    {"name": "rust_analyze_start_nonexistent_image_404", "lane": "backend", "status": "passed"},
+    {"name": "rust_job_status_404_for_unknown", "lane": "backend", "status": "passed"},
+    {"name": "rust_get_unknown_test_404", "lane": "backend", "status": "passed"},
+    {"name": "rust_put_unknown_test_404", "lane": "backend", "status": "passed"},
+    {"name": "rust_locate_grid_unknown_test_404", "lane": "backend", "status": "passed"},
+    {"name": "rust_grade_mapping_via_scale_endpoint", "lane": "backend", "status": "passed"},
+    {"name": "put_grid_boxes_preserves_ai_fields", "lane": "backend", "status": "passed", "evidence": "After PUT grid_boxes=[True]*100 (count 100 Grade E) and then [False]*100 (count 0 Grade A), ai_grid_boxes/ai_rusted_box_count/ai_grade stayed equal to original values. Mutate target was fe712a44 (ai=14 Grade C); AI verdict preserved."},
+    {"name": "inspector_count_sets_grade_boundaries_0_1_10_11_25_26_50_51_100", "lane": "backend", "status": "passed", "evidence": "9 parametrized PUT cases; each returned inspector_grade matching A/B/C/D/E rule; inspector_name/notes/at persisted."},
+    {"name": "inspector_count_clamps_at_100", "lane": "backend", "status": "passed", "evidence": "PUT inspector_count=999 -> inspector_count=100, inspector_grade=E"},
+    {"name": "inspector_count_minus_one_clears_count_and_grade", "lane": "backend", "status": "passed"},
+    {"name": "existing_modules_regression_kht_copper_dka_htcbt_dkacec", "lane": "backend", "status": "passed"},
+    {"name": "pytest_rust_suite", "lane": "backend", "status": "passed", "evidence": "/app/backend/tests/test_rust_d1748.py: 30 passed in 2.90s. JUnit: /app/test_reports/pytest/rust_d1748.xml."},
+    {"name": "ui_result_page_all_17_testids_present", "lane": "browser", "status": "passed", "evidence": "rust-result-ai-original, rust-result-manual, rust-overlay-wrap, rust-overlay-view-ai, rust-overlay-view-corr, rust-overlay-zoom-zoom, rust-overlay-zoom-full, rust-locate-grid, rust-overlay-note, rust-save-grid, rust-reset-grid-ai, rust-inspector-count/-name/-notes/-grade/-save, rust-export-pdf all found; MISSING_TESTIDS=[]"},
+    {"name": "ui_overlay_image_renders_as_data_uri", "lane": "browser", "status": "passed", "evidence": "rust-overlay-image src starts with 'data:image/jpeg;base64,...'"},
+    {"name": "ui_inspector_save_and_grade_mapping", "lane": "browser", "status": "passed", "evidence": "Set count=7 name=TEST_UIInsp -> inspector-grade shows 'B / MINOR'; rust-inspector-diff shows 'Selisih vs AI Vision: -7 kotak (AI 14 · Grade C)'; rust-result-manual cell shows '7/100 · B'. After rust-inspector-clear, manual cell goes back to '—'."},
+    {"name": "ui_export_pdf_builds_valid_html_pages_with_data_uri_images", "lane": "browser", "status": "passed", "evidence": "After clicking rust-export-pdf, window.__lastReportHtml length=469166. Contains data-testid rust-pdf-page-summary, rust-pdf-page-calc, rust-pdf-page-notes; verdict cards rust-pdf-verdict-ai/-grid/-manual all present; 5 <img> elements with data: URIs."},
+    {"name": "ui_history_selection_mode_and_combined_export", "lane": "browser", "status": "passed", "evidence": "rust-selection-enter -> rust-select-all, rust-selected-count, rust-selection-cancel appear. Clicking 2 cards -> 'rust-selected-count'='2 dipilih'. rust-export-combined builds window.__lastReportHtml length=1053108 with rust-pdf-cover + 2 summary pages + 2 calc pages + 2 notes pages."},
+    {"name": "no_console_or_page_errors_during_full_flow", "lane": "browser", "status": "passed"}
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_rust_d1748.py",
+    "/app/test_reports/pytest/rust_d1748.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "RustRecord.model_validator fills ai_grid_boxes = list(grid_boxes) only when ai_grid_boxes is None at construction. This means a legacy record whose grid was manually edited BEFORE the migration will have its (edited) grid_boxes frozen as ai_grid_boxes — not the true original AI output. The rust_update endpoint mitigates this by freezing ai_grid_boxes during the first PUT after migration, but only if ai_grid_boxes was still None in Mongo at that moment. Since the model_validator runs on every find_one -> RustRecord(**doc) conversion, the first GET will materialize ai_grid_boxes without writing back, and a subsequent PUT will perceive doc.ai_grid_boxes as still None (Mongo not updated) and freeze from the current (possibly edited) grid_boxes. The user's record 767e5224 (never edited) is safe; records that were edited pre-migration may show inaccurate 'AI original' values. Recommendation: run a one-time migration script that writes ai_grid_boxes/ai_rusted_box_count/ai_grade to Mongo for all legacy records at startup.",
+    "run_rust_locate / run_rust_vision use model 'gemini-3.1-pro-preview'. The e2e success path for locate-grid was NOT exercised in this iteration (no new AI call was made to preserve LLM budget). Grid-corner parsing (_parse_grid_corners) is defensive but has not been smoke-tested in iteration 8 against a real model response. The user's record 767e5224 already has grid_corners set so the overlay path with real corners IS exercised via the UI.",
+    "pdf.js verdict card uses `gradeTxtColor()` helper (not inspected here) — recommend verifying contrast on A (green) and B (yellow) on white printed paper.",
+    "server.py is now ~3958 lines; same split recommendation as iteration 7 stands."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rust_d1748.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None. Used existing records fe712a44 and f4e482de for mutate/export tests; both restored to original state (grid_boxes=ai_grid_boxes, inspector_count=null, inspector_name='', inspector_notes=''). User's record 767e5224 was not touched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression: cd /app/backend && REACT_APP_BACKEND_URL=<url> python -m pytest tests/test_rust_d1748.py -q (30 passed in ~3s). To rerun UI smoke, login admin/admin123, visit /rust-preventing/result/{id} and verify rust-export-pdf populates window.__lastReportHtml with pages rust-pdf-page-summary/-calc/-notes. For History combined export: /rust-preventing/history -> click rust-selection-enter -> select 2+ cards -> click rust-export-combined -> window.__lastReportHtml should contain rust-pdf-cover + one summary/calc/notes block per selected record. window.print is stubbed via add_init_script to avoid native dialog. The AI vision end-to-end (POST /api/rust/analyze/start + run_rust_locate) was NOT executed in iteration 7 or 8 to preserve LLM budget; main agent should run one real inspection on a rusty-plate photo before user handoff to confirm grid_corners parsing and the full _build_rust_record pipeline.",
+  "rca of the issue": "N/A - all enhancements working as designed."
+}

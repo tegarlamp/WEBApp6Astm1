@@ -1,0 +1,103 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+code, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+@layer base {
+    :root {
+        --background: 0 0% 100%;
+        --foreground: 0 0% 3.9%;
+        --card: 0 0% 100%;
+        --card-foreground: 0 0% 3.9%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 0 0% 3.9%;
+        --primary: 0 0% 9%;
+        --primary-foreground: 0 0% 98%;
+        --secondary: 0 0% 96.1%;
+        --secondary-foreground: 0 0% 9%;
+        --muted: 0 0% 96.1%;
+        --muted-foreground: 0 0% 45.1%;
+        --accent: 0 0% 96.1%;
+        --accent-foreground: 0 0% 9%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 0 0% 89.8%;
+        --input: 0 0% 89.8%;
+        --ring: 0 0% 3.9%;
+        --radius: 0.5rem;
+    }
+    .dark {
+        --background: 213 52% 8%;
+        --foreground: 0 0% 100%;
+        --card: 214 50% 13%;
+        --card-foreground: 0 0% 100%;
+        --popover: 214 50% 13%;
+        --popover-foreground: 0 0% 100%;
+        --primary: 180 100% 41%;
+        --primary-foreground: 213 52% 8%;
+        --secondary: 213 42% 18%;
+        --secondary-foreground: 0 0% 100%;
+        --muted: 213 42% 18%;
+        --muted-foreground: 215 16% 47%;
+        --accent: 213 42% 18%;
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 84% 60%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 213 52% 25%;
+        --input: 213 52% 25%;
+        --ring: 180 100% 41%;
+    }
+}
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+.font-heading {
+    font-family: 'Barlow Condensed', 'Inter', sans-serif;
+}
+
+::selection {
+    background: rgba(0, 210, 211, 0.3);
+    color: #fff;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-track {
+    background: #0A1420;
+}
+::-webkit-scrollbar-thumb {
+    background: #1E3A5F;
+    border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #2B5080;
+}
+
+@keyframes fade-up {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-up {
+    animation: fade-up 0.6s ease-out both;
+}

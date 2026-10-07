@@ -1,0 +1,8 @@
+import React from "react";
+import { CheckCircle2, Grid3X3, ShieldAlert } from "lucide-react";
+import { RUST_GRADES } from "@/lib/rust/api";
+import RustGrid from "@/components/rust/Grid";
+
+export default function RustScale() {
+  return <div className="flex flex-col gap-4 animate-fade-up" data-testid="rust-scale"><div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-5"><div className="flex items-center gap-3"><Grid3X3 className="h-7 w-7 text-amber-400" /><div><div className="font-heading text-xl font-bold text-zinc-50">ASTM D1748 · 100-BOX METHOD</div><div className="font-mono text-[11px] text-zinc-300">Transparent plate 60 × 80 mm · active center 50 × 50 mm</div></div></div><p className="mt-4 font-mono text-xs leading-5 text-zinc-200">Hitung setiap kotak yang memiliki minimal satu titik karat yang terlihat. Jika karat melewati garis potong, kotak tetangga yang tersentuh juga dihitung.</p></div><RustGrid boxes={[]} /><div className="flex flex-col gap-2">{Object.entries(RUST_GRADES).map(([grade, rule]) => <div key={grade} data-testid={`rust-grade-rule-${grade}`} className="flex items-center gap-3 rounded-lg border border-zinc-700 bg-zinc-900 p-3"><div className="flex h-10 w-10 items-center justify-center rounded-md font-heading text-xl font-bold" style={{ color: rule.color, backgroundColor: `${rule.color}18` }}>{grade}</div><div className="flex-1"><div className="font-mono text-sm font-bold text-zinc-50">{rule.min === rule.max ? "0" : `${rule.min} – ${rule.max}`} kotak berkarat</div><div className="font-mono text-[11px] text-zinc-500">{rule.label}</div></div>{grade === "A" ? <CheckCircle2 className="h-5 w-5 text-emerald-400" /> : <ShieldAlert className="h-5 w-5" style={{ color: rule.color }} />}</div>)}</div></div>;
+}

@@ -1,0 +1,83 @@
+{
+  "iteration": 5,
+  "mode": "retest",
+  "summary": "Re-verified the HEIC-preview fix (pickPreview helper) across the app. Backend suite (6/6) passed after repointing fixtures from /tmp to /app/tests/fixtures. The previously FAILING browser check 'dka-heic-upload-preview-visible' now PASSES: HEIC picked on /rating-dka/new renders naturalWidth=1280/naturalHeight=960 via a /api/kht/files/... server URL, no console errors, no failed requests. All other regression/new checks pass. Seed data (8 records) intact.",
+  "passed": 12,
+  "failed": 0,
+  "checks": [
+    {
+      "criterion": "Backend: HEIC upload/serve/auto-heal/reject/regression/full-analyze guarantees",
+      "name": "test_tscheck_dka_heic.py (6 cases)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "cd /app/backend && python -m pytest tests/test_tscheck_dka_heic.py -q -> '6 passed, 5 warnings in 25.77s'. Fixture paths repointed from /tmp/*.heic to /app/tests/fixtures/*.heic (old paths were wiped by pod restart)."
+    },
+    {
+      "criterion": "RETEST: HEIC phone photo picked on /rating-dka/new is visible (naturalWidth/Height>0, server URL, no blob:)",
+      "name": "dka-heic-upload-preview-visible",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "PASSED (was FAILING last run). dims={w:1280,h:960,complete:true,src:'.../api/kht/files/elastech-kht/uploads/bb9a857c-....jpg?w=1600'}. failed requests=[] console errors=[]. src does not start with blob: and contains /api/kht/files/."
+    },
+    {
+      "criterion": "No regression: plain JPEG still previews instantly via local blob URL",
+      "name": "dka-plain-jpeg-fast-preview",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "dims={w:1200,h:900,src:'blob:https://.../95c279cb-...'}. No upload requests observed before preview rendered."
+    },
+    {
+      "criterion": "HEIC photo picked on /rating-dka/new is uploaded exactly once (pick + analyze combined)",
+      "name": "dka-heic-single-upload-on-analyze",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Tracked POST /api/kht/upload requests: uploadCount after pick=1, total after full analyze+submit=1. urls=['.../api/kht/upload']. Confirms runAnalysis reuses cached imagePath. Cleaned up created batch via dka-delete-test."
+    },
+    {
+      "criterion": "End-to-end Rating DKA analysis from a HEIC photo completes, all result crops render",
+      "name": "dka-full-analysis-crops-render",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Result page reached, 4 sample crop <img> all naturalWidth>0 (119-126 x 400). Batch deleted after via dka-delete-test click."
+    },
+    {
+      "criterion": "K-HTT Analyst gallery picker renders HEIC (via cropper)",
+      "name": "khtt-heic-gallery-preview-renders",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Picking dka_iphone.heic on /khtt/new opens [data-testid=crop-editor] with <img> reaching naturalWidth=1280, naturalHeight=960. console errors=[]."
+    },
+    {
+      "criterion": "Copper Strip gallery picker renders HEIC",
+      "name": "copper-strip-heic-gallery-preview-renders",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "[data-testid=copper-image-preview] dims={w:1280,h:960}, src via /api/kht/files/.... console errors=[]."
+    },
+    {
+      "criterion": "DKA-CEC gallery picker (label) and monitor-photo picker both render HEIC",
+      "name": "dkacec-heic-gallery-preview-renders",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "dkacec-image-preview dims={w:1280,h:960}; dkacec-runhours-preview dims={w:1280,h:960}. console errors=[]."
+    },
+    {
+      "criterion": "Rating DKA history seeded images render",
+      "name": "dka-history-seeded-images-render",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "8 dka-card-* rows found (>=5 required); all 8 thumbnails naturalWidth/Height>0 e.g. 320x320, 320x240."
+    },
+    {
+      "criterion": "PDF export embedded image URLs decodable",
+      "name": "dka-pdf-export-images-decodable",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "4/4 sample crop_path fetches via fileUrl(...,1600) resolved to data:image/jpeg data URIs. failed requests=[] console errors=[]."
+    }
+  ],
+  "bugs": [],
+  "action_items": [],
+  "retest_needed": false,
+  "seed_data_integrity": "Verified via GET /api/dka/tests -> exactly 8 records preserved: DKA-DEMO-0518/0521/0524/0527/0530 plus DKA-2026-09-30-883/977/985. No tscheck-* residue left (each check's own batch cleaned up)."
+}

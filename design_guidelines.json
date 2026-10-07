@@ -1,0 +1,109 @@
+{
+  "project_name": "Laboratorium Product Development - Rust Preventing ASTM D1748 AI Vision System",
+  "archetype": "THE PERFORMANCE PRO / TACTICAL METALLURGICAL LAB",
+  "theme": {
+    "mode": "dark",
+    "primary_dark_anchor": "#0A1420",
+    "surface_card": "#112033",
+    "surface_card_subtle": "#1A2B40",
+    "border_subtle": "#1E3A5F",
+    "border_active": "#2B5080",
+    "accent_primary": "#00D2D3",
+    "accent_rust_blaze": "#FF5722",
+    "accent_rust_warn": "#F59E0B",
+    "accent_rust_pass": "#10B981",
+    "text_bright": "#FFFFFF",
+    "text_muted": "#94A3B8"
+  },
+  "typography": {
+    "heading_font": "Barlow Condensed, sans-serif",
+    "body_font": "Inter, sans-serif",
+    "mono_font": "JetBrains Mono, monospace",
+    "rules": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-heading uppercase tracking-tight font-bold",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-heading uppercase tracking-normal font-semibold",
+      "h3": "text-xl sm:text-2xl font-heading font-medium tracking-wide",
+      "h4": "text-lg sm:text-xl font-heading font-medium",
+      "body": "text-sm sm:text-base font-sans text-zinc-300 leading-relaxed",
+      "label_eyebrow": "font-mono text-[10px] sm:text-xs uppercase tracking-[0.2em] text-cyan-400",
+      "data_metrics": "font-mono font-bold tracking-tight"
+    }
+  },
+  "astm_d1748_specs": {
+    "standard_title": "ASTM D1748 - Rust Protection by Metal Preservatives in the Humidity Cabinet",
+    "specimen_dimensions": "Metal panel exposed in humidity cabinet at 48.9°C (120°F)",
+    "measurement_area": "Center 50 mm x 50 mm active evaluation zone (excluding edge effects)",
+    "measuring_plate": "Transparent cross-cut overlay 60 mm x 80 mm with 0.5 mm cross lines forming 100 squares (10x10 grid, 5 mm x 5 mm each)",
+    "counting_rule": "Count each box (1 to 100) that contains at least 1 visible rust dot. Special propagation rule: If rust extends/crosses over the cross cut line into an adjacent square, that adjacent square is counted as rusted.",
+    "grade_classification": {
+      "Grade A": { "range": "0", "min": 0, "max": 0, "color": "#10B981", "badge": "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", "status": "EXCELLENT PASS" },
+      "Grade B": { "range": "1-10", "min": 1, "max": 10, "color": "#34D399", "badge": "bg-teal-500/20 text-teal-300 border-teal-500/30", "status": "GOOD / MINOR" },
+      "Grade C": { "range": "11-25", "min": 11, "max": 25, "color": "#FBBF24", "badge": "bg-amber-500/20 text-amber-300 border-amber-500/30", "status": "FAIR / MODERATE" },
+      "Grade D": { "range": "26-50", "min": 26, "max": 50, "color": "#F97316", "badge": "bg-orange-500/20 text-orange-400 border-orange-500/30", "status": "POOR / EXTENSIVE" },
+      "Grade E": { "range": "51-100", "min": 51, "max": 100, "color": "#EF4444", "badge": "bg-red-500/20 text-red-400 border-red-500/30", "status": "REJECT / SEVERE" }
+    }
+  },
+  "image_urls": {
+    "laboratory_inspection": "https://images.unsplash.com/photo-1518152006812-edab29b069ac?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzh8MHwxfHNlYXJjaHwxfHxtZXRhbCUyMGNvcnJvc2lvbiUyMGluc3BlY3Rpb24lMjBsYWJvcmF0b3J5fGVufDB8fHx8MTc5MTA4MDgyNnww&ixlib=rb-4.1.0&q=85",
+    "technician_microscope": "https://images.unsplash.com/photo-1682562031780-856bb01f08e8?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzh8MHwxfHNlYXJjaHwzfHxtZXRhbCUyMGNvcnJvc2lvbiUyMGluc3BlY3Rpb24lMjBsYWJvcmF0b3J5fGVufDB8fHx8MTc5MTA4MDgyNnww&ixlib=rb-4.1.0&q=85",
+    "rust_texture_overlay": "https://images.unsplash.com/photo-1614535683569-129faaa108f7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njd8MHwxfHNlYXJjaHwxfHxpbmR1c3RyaWFsJTIwc3RlZWwlMjB0ZXh0dXJlJTIwcnVzdHxlbnwwfHx8fDE3OTEwODA4MjZ8MA&ixlib=rb-4.1.0&q=85",
+    "metal_corrosion_plate": "https://images.unsplash.com/photo-1612058237353-6213b412a1c4?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Njd8MHwxfHNlYXJjaHwyfHxpbmR1c3RyaWFsJTIwc3RlZWwlMjB0ZXh0dXJlJTIwcnVzdHxlbnwwfHx8fDE3OTEwODA4MjZ8MA&ixlib=rb-4.1.0&q=85"
+  },
+  "navigation_and_routes": {
+    "module_slug": "rust-preventing",
+    "menu_title": "Rust Preventing ASTM D1748",
+    "menu_short": "ASTM D1748",
+    "icon": "ShieldAlert",
+    "sub_routes": [
+      { "path": "/rust-preventing", "label": "Dashboard & Metrics", "component": "RustDashboard", "test_id": "subnav-rust-dashboard" },
+      { "path": "/rust-preventing/new", "label": "New Inspection", "component": "RustNewTest", "test_id": "subnav-rust-new" },
+      { "path": "/rust-preventing/history", "label": "Inspection History", "component": "RustHistory", "test_id": "subnav-rust-history" },
+      { "path": "/rust-preventing/trend", "label": "Analytics & Trend", "component": "RustTrend", "test_id": "subnav-rust-trend" },
+      { "path": "/rust-preventing/grid-scale", "label": "100-Grid Scale Standard", "component": "RustGridScale", "test_id": "subnav-rust-scale" },
+      { "path": "/rust-preventing/result/:id", "label": "Inspection Result Detail", "component": "RustResult", "test_id": "subnav-rust-result" }
+    ]
+  },
+  "ui_components_design": {
+    "grid_visualizer_10x10": {
+      "concept": "Interactive SVG / HTML 10x10 Matrix simulating 50x50mm central inspection zone and 60x80mm physical frame",
+      "features": [
+        "Interactive toggle of rusted boxes with click to audit AI detection",
+        "Visual propagation indicator showing cross-cut overflow lines (0.5mm cross lines)",
+        "Highlighting of 50x50mm active evaluation zone border with dimension calipers",
+        "Heatmap density view & cluster analysis",
+        "High-contrast toggle: Raw Photo, Grid Overlay, AI Mask, Combined"
+      ]
+    },
+    "result_grade_card": {
+      "concept": "Tactical telemetry gauge displaying Total Rusted Squares (0-100) & Grade Badge A-E with APCA high contrast",
+      "features": [
+        "Large grade indicator (Grade A/B/C/D/E) with pass/fail threshold",
+        "Radial or linear progress of rusted area percentage (e.g. 14 / 100 boxes = 14%)",
+        "Analysis Notes block formatted with metallurgical terminology",
+        "Export PDF report button powered by jsPDF & jsPDF-autotable"
+      ]
+    },
+    "sample_metadata_card": {
+      "fields": [
+        "Sample ID / Lot Number",
+        "Lubricant / Rust Preventive Oil Brand",
+        "Exposure Hours in Humidity Cabinet (e.g. 72h, 100h, 168h)",
+        "Cabinet Temperature (Nominal 48.9°C / 120°F)",
+        "Relative Humidity (% RH >= 95%)",
+        "Panel Substrate (e.g., Cold Rolled Steel 1018)",
+        "Operator / Metallurgical Inspector Name",
+        "Inspection Date & Timestamp"
+      ]
+    }
+  },
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "Follow exact file extensions: frontend uses .jsx and .js (not .tsx)",
+    "Always maintain consistent dark mode palette with #0A1420 background, #112033 cards, and #00D2D3 / #FF5722 kinetic accents",
+    "DO NOT use full-screen flat gradients or default SaaS blues. Rely on crisp 1px borders (border-zinc-700/80) and subtle inner highlights",
+    "Ensure every interactive button, input, tab, table row, and modal has a descriptive data-testid matching kebab-case role conventions",
+    "Include both demo/preset sample photos with pre-analyzed 100-grid states (Grade A, Grade B, Grade C, Grade D, Grade E) for instant testing without uploading files",
+    "Support single image upload with live AI Vision analysis simulation or backend endpoint call",
+    "Include sample PDF export with ASTM D1748 official layout, metadata, 10x10 grid matrix visualization, and inspector signature block",
+    "Never use pure transparent backgrounds for modals, dropdowns, headers, or popovers"
+  ]
+}

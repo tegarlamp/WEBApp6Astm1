@@ -1,0 +1,87 @@
+{
+  "summary": "Verified the HEIC/HEIF photo-upload fix for Rating DKA. Backend: 6/6 new pytest cases in tests/test_tscheck_dka_heic.py cover HEIC upload->real JPEG, thumbnail(?w=400)/PDF(?w=1600) variants, auto-heal of pre-fix raw-HEIC-under-.jpg storage objects, corrupt-file rejection (HTTP 400 'Format foto tidak didukung'), plain JPEG/PNG regression, and a full async DKA AI-analyze run from a HEIC photo whose image_path and every sample crop_path serve as decodable JPEGs. Browser: 3 of 4 checks passed (full analyze->result page crops render, seeded /rating-dka/history thumbnails render, PDF-export image URLs are decodable data:image/jpeg). ONE real bug found: the New-Test screen's immediate local preview (<img data-testid='dka-image-preview'> using URL.createObjectURL on the raw picked file, before upload) still shows a broken image for a HEIC photo because Chromium cannot natively decode HEIC — naturalWidth stays 0. This is a leftover gap in the same user-reported complaint ('photos... did not display anywhere in the UI'): the post-upload/result/history/PDF paths are now fully fixed and verified, but this pre-upload local preview is not.",
+  "passed": 8,
+  "failed": 1,
+  "bugs": [
+    {
+      "criterion": "A HEIC photo uploaded through the Rating DKA UI is actually VISIBLE on screen (the core user complaint)",
+      "severity": "medium",
+      "description": "On /rating-dka/new, after picking /tmp/dka_iphone.heic via the gallery input, the immediate local preview <img data-testid='dka-image-preview'> renders with naturalWidth=0/naturalHeight=0 (broken image icon) because it is set via URL.createObjectURL(file) on the raw HEIC bytes, and Chromium cannot decode HEIC natively. The backend fix (server-side transcode on /api/kht/upload, auto-heal on GET .../files/) is correctly applied everywhere AFTER upload completes (result page, history cards, PDF export URLs all verified decodable), but this specific pre-upload local preview step of the very flow described in the bug report still shows a broken image.",
+      "evidence": "Browser check 'dka-heic-upload-preview-visible': assertion `expect(dims.w).toBeGreaterThan(0)` failed with dims={w:0,h:0}; screenshot shows a broken-image icon inside the New Batch preview box; screenshot: /root/.emergent/automation_output/20260930_031920_977/dka-heic-upload-preview-visible-heic-preview-rendered.png. Cross-check confirms backend is healthy: the same HEIC file uploaded via /api/kht/upload (pytest test_heic_upload_stores_real_jpeg) returns HTTP 200 with a .jpg path serving valid JPEG bytes (0xFFD8)."
+    }
+  ],
+  "action_items": [],
+  "retest_needed": true,
+  "checks": [
+    {
+      "criterion": "Uploading a HEIC photo via Rating DKA stores a real JPEG (kht/upload -> .jpg, decodable, image/jpeg)",
+      "name": "test_heic_upload_stores_real_jpeg",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /api/kht/upload with /tmp/iphone_photo.heic -> 200, image_path ends .jpg; GET /api/kht/files/{path} -> 200, content-type image/jpeg, body starts 0xFFD8."
+    },
+    {
+      "criterion": "A HEIC photo uploaded through the Rating DKA UI is actually VISIBLE on screen (pre-upload local preview)",
+      "name": "dka-heic-upload-preview-visible",
+      "lane": "browser",
+      "status": "failed",
+      "evidence": "See bugs[0]. dims={w:0,h:0} for data-testid=dka-image-preview after setInputFiles(/tmp/dka_iphone.heic) on /rating-dka/new."
+    },
+    {
+      "criterion": "Thumbnail (?w=400) and PDF-embed (?w=1600) variants of a HEIC-sourced photo are decodable",
+      "name": "test_heic_upload_thumbnail_and_pdf_variants",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "GET /api/kht/files/{path}?w=400 and ?w=1600 both -> 200, image/jpeg, body starts 0xFFD8."
+    },
+    {
+      "criterion": "Photos already stored in the broken pre-fix state are auto-healed when served",
+      "name": "test_prefix_broken_photo_autoheals_on_serve",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "Seeded raw HEIC bytes under a .jpg storage path via server.put_object (confirmed not JPEG-magic); GET /api/kht/files/{path} and ?w=1600 both -> 200 with decodable JPEG (0xFFD8), auto-healed on the fly."
+    },
+    {
+      "criterion": "A completed Rating DKA analysis started from a HEIC photo yields tube crops that all render",
+      "name": "test_dka_analyze_full_flow_from_heic",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "kht/upload(HEIC)->dka/analyze/start->poll job to status=done (~20s); record's image_path and all 4 sample crop_paths served at ?w=1600 as decodable JPEG (0xFFD8). Soft-deleted after assertions via authenticated DELETE."
+    },
+    {
+      "criterion": "A completed Rating DKA analysis started from a HEIC photo yields tube crops that all render (UI)",
+      "name": "dka-full-analysis-crops-render",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Ran full New Test flow with /tmp/dka_iphone.heic through the real UI to the Result page; all 4 sample images (naturalWidth/height e.g. 134x400, 128x400) rendered; batch soft-deleted via dka-delete-test control at end."
+    },
+    {
+      "criterion": "Rating DKA PDF export contains the photos rather than blank image boxes",
+      "name": "dka-pdf-export-images-decodable",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "On seeded read-only record DKA-DEMO-0518, clicked dka-export-report-btn (no console errors, no failed /kht/files/ requests); fileUrl(crop_path,1600) for all 4 samples fetched and FileReader-encoded to data:image/jpeg;base64,... exactly as imageToDataUri does."
+    },
+    {
+      "criterion": "A corrupt or non-image file is rejected with a clear message instead of being stored invisibly",
+      "name": "test_corrupt_upload_rejected_with_clear_message",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /api/kht/upload with 5KB random bytes named broken.jpg -> 400, detail contains 'Format foto tidak didukung'."
+    },
+    {
+      "criterion": "Ordinary JPEG/PNG uploads still work unchanged (no regression); seeded history images render",
+      "name": "test_plain_jpeg_and_png_upload_regression",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "Plain JPEG and PNG each -> 200, .jpg image_path; served back at full size and ?w=400 as decodable JPEG (0xFFD8), content-type image/jpeg."
+    },
+    {
+      "criterion": "Ordinary JPEG/PNG uploads still work unchanged (no regression); seeded history images render (UI)",
+      "name": "dka-history-seeded-images-render",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "/rating-dka/history shows >=5 dka-card-* rows; all 8 visible thumbnail <img> elements rendered with naturalWidth/height > 0 (e.g. 320x320, 240x320)."
+    }
+  ]
+}

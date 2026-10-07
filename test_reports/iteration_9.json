@@ -1,0 +1,50 @@
+{
+  "iteration": 9,
+  "summary": "Verified the DUAL-METHOD feature for Rust Preventing ASTM D1748 (Active Zone 50x50 vs Seluruh Gambar). Backend: 16/16 pytest cases passed on new method endpoints — method_results dict shape, both zone+full snapshots preserved, grid_corners=[[0,0],[1,0],[1,1],[0,1]] + specimen_box_count:int for full snapshot, POST /api/rust/analyze/start accepts method='zone|full|FULL|whole|seluruh' (normalized), PUT /api/rust/tests/{id}/method switches active method and mirrors snapshot to top-level fields, 400 when target method not analyzed, 404 unknown id, PUT grid_boxes correction scoped to ACTIVE method_results snapshot only (other method untouched, ai_* preserved), inspector flow still works with method scope, POST /api/rust/tests/{id}/method/analyze 404 on unknown id, locate-grid 404 on unknown id. Frontend: NewTest picker toggles aria-pressed, tip text changes between 'Metode Active Zone' and 'Metode Seluruh Gambar', Run button swaps 'ZONA 50×50' ↔ 'SELURUH GAMBAR'. Result card on fe712a44 (dual): rust-overlay-card, rust-method-tab-zone/full, rust-method-official-zone badge, detail panel rust-method-detail-{method} with all rust-detail-* fields; switching to full tab reveals rust-method-make-official, hides rust-overlay-zoom-zoom + rust-locate-grid; rust-detail-specimen appears on full detail. PDF export (window.__lastReportHtml, 691k chars) contains rust-pdf-page-summary / -calc / -other-method / -notes + rust-pdf-verdict-other-method + rust-pdf-row-other-method. History shows rust-history-method-<id> tag ('ZONA 50×50'). fe712a44 restored (method=zone official, grid_boxes=ai_grid_boxes, inspector cleared). Did NOT execute real Gemini AI analyze (to preserve LLM budget) — polling/success path of /analyze/start + /method/analyze is unverified end-to-end.",
+  "passed": 16,
+  "failed": 0,
+  "skipped": 0,
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "checks": [
+    {"name": "pytest_rust_methods_suite", "lane": "backend", "status": "passed", "evidence": "/app/backend/tests/test_rust_methods.py: 16 passed in 9.78s. JUnit: /app/test_reports/pytest/rust_methods.xml"},
+    {"name": "method_results_dual_snapshots_shape", "lane": "backend", "status": "passed", "evidence": "fe712a44 method_results.zone has 14/C, method_results.full has 9/B, specimen_box_count=100, grid_corners=[[0,0],[1,0],[1,1],[0,1]]"},
+    {"name": "analyze_start_accepts_method_values", "lane": "backend", "status": "passed", "evidence": "zone|full|FULL|whole|seluruh all return 404 on missing image (passes validation)"},
+    {"name": "switch_method_mirrors_snapshot_to_top_level", "lane": "backend", "status": "passed", "evidence": "PUT /method full -> top-level mirrors full snapshot (grade/count/grid_boxes/ai_grid_boxes/grid_corners); switch back to zone restores zone snapshot. Other method snapshot preserved."},
+    {"name": "switch_method_400_when_not_analyzed", "lane": "backend", "status": "passed", "evidence": "f4e482de only has 'zone'; PUT /method {full} -> 400 'belum dianalisa'"},
+    {"name": "put_grid_boxes_scoped_to_active_method", "lane": "backend", "status": "passed", "evidence": "Set grid_boxes=[True]*42+[False]*58 on active=zone -> method_results.zone.grid_boxes updated to 42; method_results.full.grid_boxes untouched; ai_* on both snapshots unchanged."},
+    {"name": "inspector_still_works", "lane": "backend", "status": "passed"},
+    {"name": "method_analyze_unknown_id_404", "lane": "backend", "status": "passed"},
+    {"name": "locate_grid_unknown_id_404", "lane": "backend", "status": "passed"},
+    {"name": "ui_new_test_method_picker_full_flow", "lane": "browser", "status": "passed", "evidence": "aria-pressed toggles correctly; tip strings 'Metode Active Zone' / 'Metode Seluruh Gambar' switch; Run label contains ZONA 50×50 then SELURUH GAMBAR."},
+    {"name": "ui_result_card_dual_method_testids_present", "lane": "browser", "status": "passed", "evidence": "On fe712a44: rust-overlay-card, rust-method-tab-zone/full, rust-method-official-zone (RESMI badge, full badge absent), rust-method-detail-zone, rust-detail-count/area/grade/confidence/summary/calc all present. (rust-overlay-image appears after async overlay rendering completes — see note below.)"},
+    {"name": "ui_switch_tab_to_full_shows_make_official_and_hides_zone_only_controls", "lane": "browser", "status": "passed", "evidence": "Click rust-method-tab-full -> rust-method-detail-full visible, rust-method-make-official visible, rust-overlay-zoom-zoom hidden, rust-locate-grid hidden, rust-detail-specimen visible."},
+    {"name": "ui_export_pdf_with_both_methods_includes_other_method_pages", "lane": "browser", "status": "passed", "evidence": "window.__lastReportHtml length=691034; contains data-testid rust-pdf-page-summary, rust-pdf-page-calc, rust-pdf-page-other-method, rust-pdf-verdict-other-method, rust-pdf-row-other-method, rust-pdf-page-notes."},
+    {"name": "ui_history_method_tag_visible", "lane": "browser", "status": "passed", "evidence": "rust-history-method-fe712a44-... shows 'ZONA 50×50'."},
+    {"name": "state_restoration", "lane": "backend", "status": "passed", "evidence": "fe712a44 after test: method=zone, count=14, grade=C, ai_grid_boxes==grid_boxes, inspector_count=None, inspector_name='', inspector_notes=''. User record 767e5224 untouched."},
+    {"name": "no_console_errors_during_ui_flow", "lane": "browser", "status": "passed"}
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_rust_methods.py",
+    "/app/test_reports/pytest/rust_methods.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py line 2142: RustAnalyzeRequest.method is typed as free-form `str = 'zone'` — any value is accepted and normalized by _norm_method. Consider Literal['zone','full'] or 422 for invalid method for stricter contract (minor).",
+    "server.py 2417: rust_locate_grid 400 path checks `RustRecord(**doc).method_results.get('zone')` — because the RustRecord model_validator auto-populates method_results[rec.method] from top-level fields, a legacy record whose active method is `full` and never had a 'zone' snapshot will correctly 400, but a record that was analyzed only with 'zone' (default) will always satisfy this check. OK as designed.",
+    "server.py 2200: _norm_method() normalizes unknown method strings silently to 'zone' — this is lenient but means a typo in client payload will NOT trigger a 400. Document or tighten (minor).",
+    "server.py 2454: _set_active_rust_method persists the CURRENT active snapshot before switching, which may overwrite a prior manual correction on the outgoing method if top-level changed outside PUT scope. In practice PUT already keeps method_results in sync so this is a no-op. Watch when adding future direct top-level mutations.",
+    "AI vision end-to-end (POST /api/rust/analyze/start method='full' and POST /method/analyze) was NOT executed to preserve Gemini budget. Main agent should run one real 'full' inspection on a rusty plate to confirm _rust_result_fields(ai,'full') produces specimen_box_count correctly from the live model response.",
+    "server.py now ~4097 lines (grew ~140 lines for method endpoints). Same split recommendation stands from iterations 7/8."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rust_methods.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin / admin123 (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "None. Reused fe712a44 (dual) + f4e482de (zone-only) for mutate tests; fe712a44 fully restored (active=zone, grid=ai_grid, inspector cleared). User's record 767e5224 untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression for dual-method feature: cd /app/backend && REACT_APP_BACKEND_URL=<url> python -m pytest tests/test_rust_methods.py -q (16 passed in ~10s). Older rust tests still live in tests/test_rust_d1748.py (30 passed). UI smoke flow: login admin/admin123, go to /rust-preventing/new, click rust-method-full/zone and verify rust-run-analysis label swaps 'SELURUH GAMBAR'/'ZONA 50×50'. For dual-method result card, use fe712a44 which has both snapshots. If main agent runs a real AI analyze with method='full', verify method_results.full.specimen_box_count is a plausible integer (not None) and grid_corners==[[0,0],[1,0],[1,1],[0,1]]. Still safe NOT to touch 767e5224.",
+  "rca of the issue": "N/A - new dual-method feature behaving as specified across backend + frontend."
+}

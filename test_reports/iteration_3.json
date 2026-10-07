@@ -1,0 +1,25 @@
+{
+  "summary": "Full backend + frontend regression of the new Rating DKA module. Backend: 7/7 pytest in /app/backend/tests/test_dka.py pass (12s incl. full Gemini AI batch flow) covering /api/dka/dashboard (seeded DKA-DEMO-BATCH latest, 4 samples, distribution 1/1/1/1 across CLEAR/Aspect 1/2/3), /api/dka/tests list+search (batch_id/product/sample_id q filters), get + 404, PUT samples update (index 2 rating -> Aspect 3 sets severity=3 & color=#161616 & edited=true; index 1 sample_id update; RESTORED to seeded values 'Aspect 1' / 'DKA-2026-001'), /api/dka/trend, /api/dka/reference-scale (data URI + 4 categories in correct order), full AI analyze flow (kht/upload -> dka/analyze/start -> poll job -> record with 1-4 samples each in allowed rating set, severity 0-3, color, confidence 0-100, crop_path served via /api/kht/files/{path}), missing-image 404, DELETE soft-delete (created batch only; seeded DKA-DEMO-BATCH not touched by delete).\n\nFrontend: Dashboard shows dka-latest-card / dka-latest-batch-id='DKA-DEMO-BATCH' / dka-latest-count='4 sampel' / dka-stat-batches=1 / dka-stat-samples=4 / dka-distribution rows all present (1 each), dka-scale-link visible, tabs dka-tab-dashboard/new-test/history/trend present, sidebar sidebar-rating-dka-dashboard/new-test/history/trend present (scale is intentionally not in sidebar; reachable via dka-scale-link). New Test: defaults batch=DKA-YYYY-MM-DD-nnn, product='Engine Oil SAE 15W-40', temp=320, duration=16; dka-ocr-tip visible; dka-run-analysis without image shows toast 'Ambil atau unggah foto batch…'; setting file into dka-gallery-input shows dka-image-preview with dka-retake-camera and dka-change-gallery. Result page (seeded batch): dka-result-hint + exactly 4 dka-editor-N cards; rating chip click (index 3 -> Aspect 3) persists across reload (aria-pressed=true after reload) then restored to original 'Aspect 2'; sample-id edit (index 4 -> 'TEST_SID_X4') fires toast 'Sample ID tersimpan.' and persists after reload, then restored to 'DKA-2026-004'; dka-export-report-btn triggers 'Menyiapkan PDF batch report…' toast AND appends data-testid=pdf-print-frame iframe; unknown id shows dka-not-found + dka-go-home. History: dka-search filters via backend (q='DKA-DEMO' returns the 1 seeded card), dka-selection-enter -> dka-select-all + dka-selected-count='1 dipilih' -> dka-export-combined shows 'Menyiapkan PDF gabungan' toast. Trend: dka-trend + SVG chart with circles + 1 dka-trend-point-* link. Scale: dka-scale-image (data:image/jpeg;base64 URI) + all 4 dka-category-{CLEAR,Aspect-1,Aspect-2,Aspect-3} rows + kht-back-btn. Regression: /khtt, /copper-strip, / load without errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_dka.py", "/app/test_reports/pytest/dka_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py DKA seed writes only ONE demo batch (DKA-DEMO-BATCH) - trend chart has a single data point and history has one card. Consider seeding 3-4 demo batches spread across dates so trend/history are more meaningful in a demo.",
+    "server.py dka_delete is not idempotent (returns 404 on already-deleted record via update matched_count). Minor.",
+    "NewTest.jsx dka-gallery-input is a truly hidden input (className='hidden'); works with set_input_files but Playwright's wait_for_selector(visible=default) times out - not user-facing.",
+    "Result.jsx SampleEditor uses key={`${s.index}-${s.sample_id}`} so editing sample_id remounts the editor and drops focus on save; acceptable but noteworthy.",
+    "pdf.js printHtmlOnWeb removes the iframe after 1.4s in headless — verified toast + iframe attachment but window.print() is a no-op in headless (expected)."
+  ],
+  "updated_files": ["/app/backend/tests/test_dka.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% of tested flows"},
+  "seed_data_creation": "None persistent. AI-analyzed batch created by test_analyze_full_flow_and_delete was soft-deleted at end of the run. Seeded DKA-DEMO-BATCH sample 3 rating and sample 1 sample_id were transiently mutated during backend PUT test AND transiently mutated during frontend Result-page test (sample 3 rating and sample 4 sample_id) — BOTH were restored to seeded values within the same run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "DKA seed inserts a single batch 'DKA-DEMO-BATCH' with 4 samples (sample_ids DKA-2026-001..004, ratings CLEAR/Aspect 1/2/3) only when db.dka_tests is empty. AI flow reuses /api/kht/upload and files are served via /api/kht/files/{path}. Vision model 'gemini-3.1-pro-preview'. Full AI flow completed in <10s in this run — acceptable to keep 180s poll timeout. printHtmlOnWeb appends [data-testid=pdf-print-frame] iframe then removes ~1.4s later; assert presence within 1s of clicking export.",
+  "rca of the issue": "N/A — no bugs found."
+}
