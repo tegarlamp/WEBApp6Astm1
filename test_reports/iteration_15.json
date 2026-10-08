@@ -1,0 +1,23 @@
+{
+  "summary": "Manual re-crop feature on Copper Strip ASTM D130 Batch Result page verified end-to-end. Backend: PUT /api/copper/tests/{id}/crop crops the original image using the submitted normalized bbox, writes a new crop_path, persists bbox + edited flag, and validates inputs (422 for wrong-length bbox at pydantic layer, 400 for too-small area, 404 for unknown id). All 7 pytest cases pass against the public preview URL. New batches created via /api/copper/batch/analyze/start now carry a per-sample bbox (not None). Frontend: On /copper-strip/batch/<batch_id>, each sample card exposes copper-batch-crop-btn-N which opens copper-crop-editor showing the original full photo with an amber copper-crop-box positioned at the AI bbox. All four handles (nw/ne/sw/se) are rendered and visible. Pointer-drag on copper-crop-box moves it; dragging copper-crop-handle-se/nw resizes it (verified via bounding-box deltas). copper-crop-save calls the backend, closes the modal, and copper-batch-crop-img-1 updates to the new crop URL; after full page reload the same new URL persists (database state is authoritative). copper-crop-cancel and copper-crop-close both close the modal without saving. copper-batch-export-pdf regenerates window.__lastReportHtml (~106 KB) which inlines 4 data:image/jpeg;base64 payloads; the base64 prefix of the new crop (fetched directly from backend) is present in the HTML, confirming the exported PDF uses the latest crop. Iteration-14 regression (PUT /copper/tests/{id} sample_id -> meta.sample_id) still passes.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_copper_recrop.py",
+    "/app/test_reports/pytest/copper_recrop.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "CropEditor.applyDrag: when resizing via a pure 'nw' / 'ne' / 'sw' / 'se' corner the mode string includes both an N/S and W/E letter and is handled correctly, but the MIN=0.03 floor is enforced independently per axis — a user who drags the SE handle NW past the top-left can still produce a very thin strip (e.g. 0.03 x 1.0). Backend _crop_bbox rejects area < some threshold; the editor could pre-clamp area to give a better UX message (currently save returns a toast with 'Area crop terlalu kecil').",
+    "CropEditor local box state is seeded only from `sample.bbox` on mount; if the parent re-renders with a fresh sample object (unlikely here since the editor is only mounted when `cropping=true`) the box would not update. Add a useEffect([sample.id]) sync for safety.",
+    "copper_recrop (backend/server.py line 1984) stores `bbox` as a TOP-LEVEL field alongside `crop_path`. _build_copper_batch_records also writes bbox at the top level — consistent, good. However the CopperRecord Pydantic model (line 1629) declares `bbox: Optional[List[float]] = None`; nothing enforces the 4-length invariant at the model layer, only at the recrop handler. Low priority.",
+    "server.py still 4149 lines — modular split still recommended (iteration_13/14 noted the same)."
+  ],
+  "updated_files": ["/app/backend/tests/test_copper_recrop.py"],
+  "success_rate": {"backend": "100% (7/7 pytest)", "frontend": "100% (open/drag/resize/save/reload/cancel/close/export-PDF-contains-new-crop)"},
+  "test_credentials": "admin / admin123",
+  "seed_data_creation": "Created temporary batch CU-BATCH-UITEST-1791432634 (4 CU-01..CU-04 strips from /app/tests/fixtures/copper_batch_4.jpg) for the UI run and deleted it after the test. The pytest module also creates and tears down one TEST_RECROP_* batch per run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Fresh batches now persist `bbox` top-level on each copper_tests doc (verified via GET /api/copper/batches/{id}). To exercise the CropEditor opening on the AI box you MUST create a new batch — older batches in the DB still have bbox=None and the editor falls back to a centered default [0.35,0.1,0.3,0.8]. UI selectors: open editor -> `copper-batch-crop-btn-N`; modal root -> `copper-crop-editor`; drag target -> `copper-crop-box`; handles -> `copper-crop-handle-{nw|ne|sw|se}`; save -> `copper-crop-save`; cancel -> `copper-crop-cancel`; X close -> `copper-crop-close`; card image updates at `copper-batch-crop-img-N`. PDF export (`copper-batch-export-pdf`) sets `window.__lastReportHtml` with inlined base64 images; to verify the new crop is embedded, fetch the new crop URL in-browser, base64 the first ~60 bytes, and look for that prefix in __lastReportHtml. Reusable pytest at /app/backend/tests/test_copper_recrop.py."
+}
