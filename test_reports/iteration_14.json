@@ -1,0 +1,23 @@
+{
+  "summary": "Verified both bug fixes for Copper Strip ASTM D130 Batch flow. Backend fix (map {sample_id} -> meta.sample_id in PUT /api/copper/tests/{id}) and prompt/crop fix (Gemini-native box_2d 0-1000 -> bbox, pad=0.008) both work. All 4 backend pytest cases pass against the public preview URL. UI flow also verified end-to-end via Playwright: uploaded /app/tests/fixtures/copper_batch_4.jpg, triggered copper/batch/analyze/start, polled -> status=done, detected_count=4. On the Batch Result page: (a) editing [data-testid=copper-batch-sid-1] and IMMEDIATELY clicking [data-testid=copper-batch-export-pdf] without blur produced a window.__lastReportHtml of 100328 chars that CONTAINS the new SID 'UI_EDIT_ABC_42' and does NOT contain the pre-edit value 'SEED_A' -> pending drafts flushed before PDF; (b) full page reload shows the edited value in the input -> persisted to meta.sample_id; (c) blur-save on sample #2 also persisted after reload. All 4 crop_path images are distinct files; screenshot visually confirms each sample card shows ONE copper strip (CU-01, CU-02, ...).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_copper_batch_bugfix.py",
+    "/app/test_reports/pytest/copper_batch_bugfix.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "/app/backend/server.py still 4118 lines — same split recommendation as iteration_13 (not blocking).",
+    "copper_update: `changes.pop('sample_id').strip()` runs even for empty string; empty string would overwrite meta.sample_id to ''. Frontend already guards (saveSampleId returns if !value), but backend could add `if changes['meta.sample_id']:` to avoid blanking on direct API misuse.",
+    "SampleEditor local `sid` state is sync'd via useEffect([sample.meta?.sample_id]); works fine but could race with user typing right as the mutate response arrives. Acceptable since draft ref is authoritative on export."
+  ],
+  "updated_files": ["/app/backend/tests/test_copper_batch_bugfix.py"],
+  "success_rate": {"backend": "100% (4/4 pytest)", "frontend": "100% (edit+blur save, edit+export-without-blur flush, reload persistence, 4 one-strip crops)"},
+  "test_credentials": "admin / admin123",
+  "seed_data_creation": "Created and cleaned up batches TEST_BUG1 (pytest fixture) and TEST_UI_BUG1 (Playwright). Both deleted at end of their runs via DELETE /api/copper/batches/{id}.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Fixture /app/tests/fixtures/copper_batch_4.jpg (1264x848, 4 strips CU-01..CU-04) reliably yields 4 detections in ~30s via gemini-3.1-pro-preview. Reusable pytest at /app/backend/tests/test_copper_batch_bugfix.py covers PUT persistence (meta.sample_id), trim behaviour, 4-crop width check (<= 1/3 original width for >=3 of 4 crops), and OCR label reading. UI flow pattern: login via [data-testid=login-username/password/submit] -> navigate to /copper-strip/batch/<batch_id> -> inputs are [data-testid=copper-batch-sid-N] (N starts at 1) -> export buttons are [data-testid=copper-batch-export-pdf] (header icon) and [data-testid=copper-batch-export-report-btn] (bottom AmberBtn) -> inspect window.__lastReportHtml for generated PDF content.",
+  "rca of the issue": "Bug 1 RCA: previous PUT handler in copper_update stored `sample_id` as a TOP-LEVEL field on the copper_tests document instead of nested at meta.sample_id. Pydantic CopperRecord re-constructed from doc then re-read meta.sample_id (unchanged), so PUT response AND subsequent GET AND PDF export all showed the stale OCR value. Current fix (lines 1957-1958) correctly pops 'sample_id' from the changes dict and sets 'meta.sample_id' via Mongo dot-path $set — verified by pytest + UI flow. Bug 2 RCA: previous Gemini prompt did not use the native box_2d [ymin,xmin,ymax,xmax] 0-1000 convention and crop pad was overly generous, so crops sometimes contained neighbouring strips. Current prompt instructs box_2d 0-1000 relative to the operator photo with per-strip non-overlap rule, _copper_norm_samples converts to bbox fraction, and pad reduced to 0.008 — producing 4 distinct crops each ~1/3 of original width (verified width check + visual screenshot)."
+}

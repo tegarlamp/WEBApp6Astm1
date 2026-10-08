@@ -241,3 +241,4 @@ Testing agent iteration_6.json: 20/20 pass. Confirmed: login sets HttpOnly cooki
 - 2026-06: Rust D1748 Result — kotak pada foto overlay "PETA GRID PADA FOTO" bisa diklik manual (toggle karat), count & grade ASTM D1748 update live, tombol SIMPAN KOREKSI. Demo record RUST-DEMO-079 di-seed (AI budget habis).
 - 2026-06: Export PDF Rust disederhanakan — hanya 'Penilaian Inspector' (dari grid tersimpan), tanpa AI/pembanding/manual/perbandingan; overlay & matriks mengikuti grid inspector.
 - 2026-06: AI Vision/OCR fixed — EMERGENT_LLM_KEY diganti ke key milik user (dari .env-backup) karena key pod 0 budget. Semua modul AI & OCR lolos tes.
+- 2026-06: Copper batch — PUT sample_id kini simpan ke meta.sample_id (input & PDF sinkron, draft disimpan sebelum export); crop AI pakai Gemini box_2d (1 strip per crop, pad 0.008).
