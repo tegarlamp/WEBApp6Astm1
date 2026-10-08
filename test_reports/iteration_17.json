@@ -1,0 +1,29 @@
+{
+  "summary": "Verified new Salt Spray ASTM B117 module (clone of Rust D1748, zone-only). Backend: 7/7 pytest green on /app/backend/tests/test_salt_spray.py — reference-scale, dashboard, trend load; analyze/start -> poll job -> done produced a real AI SaltRecord (method='zone', meta.sample_id='TEST_SALT_17', integer rusted_box_count, grid_boxes list); PUT /salt-spray/tests/{id}/method with method='full' STILL returns method='zone' (as required, _salt_norm_method hardcodes 'zone'); data isolation verified — new salt record id does NOT appear in /api/rust/tests (and vice-versa confirmed via existence in /api/salt-spray/tests); search (?q=TEST_SALT_17) finds it; PUT inspector_count=3 updates and recomputes inspector_grade. Frontend: sidebar shows 'Salt Spray ASTM B117' + 5 sub-tabs (Dashboard, New Inspection, History, Trend, 100-Grid Scale); /salt-spray/new has NO method picker (salt-method-zone=0, salt-method-full=0), no 'SELURUH GAMBAR' text, has tip 'Active Zone 50×50 mm' + 'RUN ASTM B117 AI · ZONA 50×50' button + salt-gallery-input + salt-run-analysis; result page (seeded via AI, id c37d1a41…) has NO salt-method-tabs, NO 'JADIKAN HASIL', NO 'SELURUH', has 'ZONA 50×50', 100 salt-grid-box-N boxes, salt-export-pdf, salt-locate-grid, salt-method-analyze, salt-save-grid, salt-reset-grid-ai, salt-delete-result, salt-overlay-live-count ('38/100'); History shows 'ZONA 50×50' badge; Trend + 100-Grid Scale pages load with 'ASTM B117'. PDF export triggers window.__lastReportHtml (1.2MB) containing 'Penilaian Inspector', '50×50', NO 'Seluruh', NO 'pembanding'. Rust D1748 regression intact — /rust-preventing/new still has rust-method-zone + rust-method-full. Total AI calls this run: 1 pytest + 2 seed attempts (1 failed w/ JSON parse, 1 succeeded) = 3.",
+  "backend_issues": {"critical": [], "minor": [
+    {"endpoint": "POST /api/salt-spray/analyze/start", "issue": "Observed one AI call returning invalid JSON parsed as 'Expecting value: line 1 column 65 (char 64)'. Second attempt succeeded. Suggest adding a lightweight retry or more lenient JSON extraction (as rust d1748 already does) in run_salt_vision."}
+  ]},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_salt_spray.py",
+    "/app/test_reports/pytest/salt_spray.xml"
+  ],
+  "action_items": [
+    "Low priority: harden run_salt_vision JSON parsing with retry/strip (same pattern as rust d1748 run_rust_vision) — observed ~1/3 parse failure rate during this run."
+  ],
+  "critical_code_review_comments": [
+    "_salt_norm_method always returns 'zone' — correct per spec but field 'method' on SaltAnalyzeRequest and SaltMethodRequest is now dead; could remove to simplify API (currently accepted-but-ignored, which is fine for forward-compat with Rust clone).",
+    "SaltAnalyzeRequest comment still says 'full = seluruh gambar' (server.py L2757) — stale, update comment to reflect zone-only.",
+    "figure.js still carries METHOD['full'] copy ('SELURUH FOTO'/'Seluruh Gambar') and pdf.js builds a title mentioning 'SELURUH GAMBAR' when method==='full'. Dead branch now (UI never sets full) — safe to prune.",
+    "server.py now 4712 lines (grew ~500 w/ salt clone). Continued modular-split debt from iteration_13–16.",
+    "Salt Result page uses testid 'salt-reset-grid-ai' / 'salt-save-grid' / 'salt-delete-result' — task spec mentioned 'salt-save-corrections' / 'salt-delete' / 'RESET KE AI' labels; actual labels are 'SIMPAN KOREKSI GRID' / 'RESET KE AI' / 'HAPUS INSPEKSI'. Behavior correct, naming diverges slightly from spec — document for next agent."
+  ],
+  "updated_files": ["/app/backend/tests/test_salt_spray.py"],
+  "success_rate": {"backend": "100% (7/7 pytest incl. real AI roundtrip + method-full-still-zone + rust isolation)", "frontend": "100% (new/history/result/trend/dashboard/grid-scale + PDF export + rust regression)"},
+  "test_credentials": "admin / admin123",
+  "seed_data_creation": "Backend pytest creates TEST_SALT_17 and auto-deletes after the module teardown. Separately seeded SEED_SALT_FE (record c37d1a41-4021-49fd-8d69-9dcd66cbf51f) via /app/backend/tests + /tmp/seed_salt.py to exercise frontend Result page, then DELETE'd at end of run. No lingering salt records; starting-and-ending count = 0.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Salt Spray reusable pytest at /app/backend/tests/test_salt_spray.py (uses /api/kht/upload for image). Seed helper pattern: POST /api/kht/upload -> returns {image_path}; POST /api/salt-spray/analyze/start with flat SaltMeta fields (sample_id/product/batch/operator/exposure_hours/temperature_c, NOT nested 'meta') -> poll /api/salt-spray/analyze/jobs/{id}. Backend method endpoint always normalizes to 'zone' via _salt_norm_method. Frontend result page testids differ from rust naming slightly: salt-save-grid, salt-reset-grid-ai, salt-delete-result. figure.js/pdf.js still have dead 'full' branch — expected per spec but could be cleaned.",
+  "rca of the issue": "N/A (feature add, not bug). Minor: 1/3 AI vision calls returned malformed JSON — RCA: Gemini occasionally wraps JSON in markdown fence or truncates; run_salt_vision does json.loads directly. Mitigation: port the strip+regex-extract pattern already used in rust d1748's run_rust_vision (or wrap with 1 retry on JSONDecodeError)."
+}
