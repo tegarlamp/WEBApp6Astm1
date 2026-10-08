@@ -243,3 +243,4 @@ Testing agent iteration_6.json: 20/20 pass. Confirmed: login sets HttpOnly cooki
 - 2026-06: AI Vision/OCR fixed — EMERGENT_LLM_KEY diganti ke key milik user (dari .env-backup) karena key pod 0 budget. Semua modul AI & OCR lolos tes.
 - 2026-06: Copper batch — PUT sample_id kini simpan ke meta.sample_id (input & PDF sinkron, draft disimpan sebelum export); crop AI pakai Gemini box_2d (1 strip per crop, pad 0.008).
 - 2026-06: Copper batch — Atur Crop Manual (modal geser/resize kotak crop per sample, PUT /api/copper/tests/{id}/crop, bbox disimpan per record).
+- 2026-06: Copper batch — Rating Ulang Otomatis (POST /api/copper/tests/{id}/rerate, checkbox di CropEditor default aktif).
