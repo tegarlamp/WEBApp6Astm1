@@ -1502,6 +1502,26 @@ async def run_copper_vision(image_b64: str) -> dict:
     return _parse_ai_json(resp if isinstance(resp, str) else str(resp))
 
 
+_COPPER_BOX_RULE = (
+    '"box_2d":[ymin,xmin,ymax,xmax] (integers 0-1000 relative to the operator photo) that encloses ONLY that ONE '
+    "copper strip (plus its own label if attached). Each box must contain exactly one strip: never include any "
+    "part of a neighbouring strip, and boxes of different strips must not overlap. "
+)
+
+
+def _copper_norm_samples(ai: dict) -> dict:
+    """Convert Gemini box_2d [ymin,xmin,ymax,xmax] (0-1000) to bbox [x,y,w,h] (0-1)."""
+    for smp in (ai or {}).get("samples") or []:
+        b = smp.get("box_2d")
+        try:
+            y0, x0, y1, x1 = [max(0.0, min(1000.0, float(v))) / 1000 for v in b]
+            if x1 > x0 and y1 > y0:
+                smp["bbox"] = [x0, y0, x1 - x0, y1 - y0]
+        except Exception:
+            pass
+    return ai
+
+
 COPPER_BATCH_PROMPT = (
     "You are an ASTM D130 / IP 154 Copper Strip Corrosion batch inspection engine.\n\n"
     "You are given TWO images:\n"
@@ -1510,15 +1530,15 @@ COPPER_BATCH_PROMPT = (
     "Analyze the SECOND image as a batch. Detect each tested strip separately, including its handwritten label. "
     "The strips may be arranged horizontally, vertically, or in a mixed layout. Order them top-to-bottom and "
     "left-to-right (reading order). For every detected strip: OCR the handwritten label exactly as visible, "
-    "rate its tarnish appearance against the FIRST reference chart, and provide a normalized bbox [x,y,w,h] "
-    "covering the strip and its label (all values 0.0–1.0 relative to the SECOND image). Mentally rotate or "
-    "flip labels when needed. Ignore glare, reflections, and background.\n\n"
+    "rate its tarnish appearance against the FIRST reference chart, and provide a tight bounding box "
+    + _COPPER_BOX_RULE
+    + "Mentally rotate or flip labels when needed. Ignore glare, reflections, and background.\n\n"
     "Allowed classifications (code = group: description):\n"
     + _COPPER_CLASS_TEXT
     + "\nStatus rule: CLEAR for 0, 1a, 1b; TARNISH for all other classes.\n\n"
     "Return ONLY valid minified JSON with exactly this shape:\n"
     '{"samples":[{"index":1,"sample_id":"<OCR label or empty>",'
-    '"classification":"1b","confidence":<0-100>,"bbox":[x,y,w,h],'
+    '"classification":"1b","confidence":<0-100>,"box_2d":[ymin,xmin,ymax,xmax],'
     '"summary":"<short Bahasa Indonesia sentence citing observed colour>",'
     '"recommendation":"<short practical Bahasa Indonesia recommendation>"}]}\n'
     "Include one object per detected strip, maximum four, in reading order."
@@ -1538,7 +1558,7 @@ async def run_copper_batch_vision(image_b64: str) -> dict:
             file_contents=[ImageContent(image_base64=copper_reference_b64()), ImageContent(image_base64=image_b64)],
         ),
     )
-    return _parse_ai_json(resp if isinstance(resp, str) else str(resp))
+    return _copper_norm_samples(_parse_ai_json(resp if isinstance(resp, str) else str(resp)))
 
 
 
@@ -1547,9 +1567,9 @@ COPPER_BATCH_OCR_PROMPT = (
     "The image contains up to FOUR tested copper strips arranged horizontally, vertically, or in a mixed layout. "
     "Detect each strip and read the handwritten label attached to that strip. Order samples top-to-bottom and "
     "left-to-right. Mentally rotate or flip labels when needed. Return the exact label text, an OCR confidence, "
-    "and a normalized bbox [x,y,w,h] covering the strip and its label. If a label cannot be read, use an empty "
+    "and a tight bounding box " + _COPPER_BOX_RULE + "If a label cannot be read, use an empty "
     "sample_id. Return ONLY valid minified JSON: "
-    '{"samples":[{"index":1,"sample_id":"<OCR text or empty>","confidence":<0-100>,"bbox":[x,y,w,h]}]}'
+    '{"samples":[{"index":1,"sample_id":"<OCR text or empty>","confidence":<0-100>,"box_2d":[ymin,xmin,ymax,xmax]}]}'
 )
 
 
@@ -1563,7 +1583,7 @@ async def run_copper_batch_ocr(image_b64: str) -> dict:
         chat,
         UserMessage(text=COPPER_BATCH_OCR_PROMPT, file_contents=[ImageContent(image_base64=image_b64)]),
     )
-    return _parse_ai_json(resp if isinstance(resp, str) else str(resp))
+    return _copper_norm_samples(_parse_ai_json(resp if isinstance(resp, str) else str(resp)))
 
 class CopperMeta(BaseModel):
     sample_id: str = ""
@@ -1689,7 +1709,7 @@ def _build_copper_batch_records(content: bytes, raw: list, req: CopperBatchAnaly
     for i, sample in enumerate(ordered):
         cls = copper_class_for(sample.get("classification"))
         try:
-            crop_bytes = _crop_bbox(content, sample.get("bbox"))
+            crop_bytes = _crop_bbox(content, sample.get("bbox"), pad=0.008)
         except Exception:
             crop_bytes = _crop_column(content, i, len(ordered))
         crop_path = ""
@@ -1934,6 +1954,8 @@ async def copper_update(test_id: str, upd: CopperUpdate):
     if not doc:
         raise HTTPException(status_code=404, detail="Test not found")
     changes: dict = {k: v for k, v in upd.model_dump(exclude_none=True).items()}
+    if "sample_id" in changes:
+        changes["meta.sample_id"] = changes.pop("sample_id").strip()
     if "classification" in changes:
         cls = copper_class_for(changes["classification"])
         changes.update({

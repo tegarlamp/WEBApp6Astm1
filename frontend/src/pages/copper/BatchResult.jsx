@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FileDown, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -8,8 +8,9 @@ import { buildCopperCombinedHtml, printHtmlOnWeb } from "@/lib/copper/pdf";
 import { Card, InfoRow, KhtHeader } from "@/components/kht/ui";
 import { AmberBtn, CopperClassGauge, CopperClassPicker } from "@/components/copper/ui";
 
-const SampleEditor = ({ sample, busy, onClassification, onSaveId }) => {
+const SampleEditor = ({ sample, busy, onClassification, onSaveId, onDraft }) => {
   const [sid, setSid] = useState(sample.meta?.sample_id || "");
+  useEffect(() => { setSid(sample.meta?.sample_id || ""); }, [sample.meta?.sample_id]);
   return (
     <Card data-testid={`copper-batch-sample-${sample.sample_index}`}>
       <div className="flex gap-4">
@@ -20,7 +21,7 @@ const SampleEditor = ({ sample, busy, onClassification, onSaveId }) => {
           <input
             data-testid={`copper-batch-sid-${sample.sample_index}`}
             value={sid}
-            onChange={(e) => setSid(e.target.value)}
+            onChange={(e) => { setSid(e.target.value); onDraft(e.target.value); }}
             onBlur={() => onSaveId(sid)}
             onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
             placeholder={`Unknown ${sample.sample_index}`}
@@ -52,12 +53,14 @@ export default function CopperBatchResult() {
   const update = useUpdateCopper();
   const del = useDeleteCopperBatch();
   const [exporting, setExporting] = useState(false);
+  const drafts = useRef({});
 
   async function saveSampleId(sample, sampleId) {
     const value = sampleId.trim();
     if (!value || value === sample.meta?.sample_id) return;
     try {
       await update.mutateAsync({ id: sample.id, changes: { sample_id: value } });
+      delete drafts.current[sample.id];
       toast.success(`Sample #${sample.sample_index} tersimpan.`);
     } catch (e) {
       toast.error(String(e?.message || "Gagal menyimpan Sample ID.").slice(0, 120));
@@ -76,7 +79,14 @@ export default function CopperBatchResult() {
     if (!records?.length) return;
     setExporting(true);
     try {
-      printHtmlOnWeb(await buildCopperCombinedHtml(records));
+      const latest = await Promise.all(records.map(async (r) => {
+        const v = (drafts.current[r.id] ?? "").trim();
+        if (!v || v === r.meta?.sample_id) return r;
+        const saved = await update.mutateAsync({ id: r.id, changes: { sample_id: v } });
+        delete drafts.current[r.id];
+        return saved;
+      }));
+      printHtmlOnWeb(await buildCopperCombinedHtml(latest));
       toast.success(`Menyiapkan PDF batch (${records.length} sample)…`);
     } catch (e) {
       toast.error(`Export PDF gagal: ${String(e?.message || "unknown error").slice(0, 140)}`);
@@ -122,6 +132,7 @@ export default function CopperBatchResult() {
                 busy={update.isPending}
                 onClassification={(code) => changeClassification(sample, code)}
                 onSaveId={(sid) => saveSampleId(sample, sid)}
+                onDraft={(v) => { drafts.current[sample.id] = v; }}
               />
             ))}
             <Card>
