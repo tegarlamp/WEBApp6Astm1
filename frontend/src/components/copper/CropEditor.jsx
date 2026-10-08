@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import { Crop, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
-import { fileUrl, useRecropCopper } from "@/lib/copper/api";
+import { fileUrl, useRecropCopper, useRerateCopper } from "@/lib/copper/api";
 
 const MIN = 0.03;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -19,6 +19,8 @@ function applyDrag(start, mode, dx, dy) {
 
 export default function CropEditor({ sample, onClose }) {
   const recrop = useRecropCopper();
+  const rerate = useRerateCopper();
+  const [autoRate, setAutoRate] = useState(true);
   const wrap = useRef(null);
   const drag = useRef(null);
   const [box, setBox] = useState(sample.bbox?.length === 4 ? sample.bbox : [0.35, 0.1, 0.3, 0.8]);
@@ -36,8 +38,15 @@ export default function CropEditor({ sample, onClose }) {
   const up = () => { drag.current = null; };
 
   async function save() {
-    try { await recrop.mutateAsync({ id: sample.id, bbox: box }); toast.success(`Crop sample #${sample.sample_index} tersimpan.`); onClose(); }
-    catch (e) { toast.error(String(e?.message || "Gagal menyimpan crop").slice(0, 140)); }
+    try { await recrop.mutateAsync({ id: sample.id, bbox: box }); toast.success(`Crop sample #${sample.sample_index} tersimpan.`); }
+    catch (e) { toast.error(String(e?.message || "Gagal menyimpan crop").slice(0, 140)); return; }
+    if (autoRate) {
+      try {
+        const r = await rerate.mutateAsync(sample.id);
+        toast.success(`AI menilai ulang sample #${sample.sample_index}: kelas ${r.classification} (${r.status}).`);
+      } catch (e) { toast.error(`Rating ulang AI gagal: ${String(e?.message || "").slice(0, 120)}`); }
+    }
+    onClose();
   }
 
   const [x, y, w, h] = box;
@@ -61,10 +70,14 @@ export default function CropEditor({ sample, onClose }) {
             </div>
           </div>
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <label className="mr-auto flex cursor-pointer items-center gap-2 font-mono text-[11px] text-zinc-300">
+            <input type="checkbox" checked={autoRate} onChange={(e) => setAutoRate(e.target.checked)} data-testid="copper-crop-autorate" className="accent-amber-500" />
+            Nilai ulang kelas ASTM D130 dengan AI setelah simpan
+          </label>
           <button type="button" onClick={onClose} className="rounded-md border border-zinc-700 px-4 py-2 font-mono text-xs text-zinc-300 hover:bg-zinc-800" data-testid="copper-crop-cancel">BATAL</button>
-          <button type="button" onClick={save} disabled={recrop.isPending} data-testid="copper-crop-save" className="flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 font-mono text-xs font-bold tracking-widest text-zinc-950 hover:bg-amber-400 disabled:opacity-50">
-            {recrop.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crop className="h-4 w-4" />}SIMPAN CROP
+          <button type="button" onClick={save} disabled={recrop.isPending || rerate.isPending} data-testid="copper-crop-save" className="flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2 font-mono text-xs font-bold tracking-widest text-zinc-950 hover:bg-amber-400 disabled:opacity-50">
+            {recrop.isPending || rerate.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Crop className="h-4 w-4" />}{rerate.isPending ? "AI MENILAI ULANG…" : "SIMPAN CROP"}
           </button>
         </div>
       </div>

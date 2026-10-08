@@ -231,3 +231,15 @@ export function useRecropCopper() {
     onSuccess: () => invalidate(qc),
   });
 }
+
+export function useRerateCopper() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id) => {
+      const res = await fetch(`${COPPER}/tests/${id}/rerate`, { method: "POST" });
+      if (!res.ok) throw new Error((await res.text()) || `Rating ulang gagal: ${res.status}`);
+      return res.json();
+    },
+    onSuccess: () => invalidate(qc),
+  });
+}

@@ -2002,6 +2002,33 @@ async def copper_recrop(test_id: str, req: CopperCropRequest):
     return CopperRecord(**{**doc, **changes})
 
 
+@api_router.post("/copper/tests/{test_id}/rerate", response_model=CopperRecord)
+async def copper_rerate(test_id: str):
+    doc = await db.copper_tests.find_one({"id": test_id, "deleted_at": None}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Test not found")
+    try:
+        content, _ = await run_in_threadpool(get_object, doc.get("crop_path") or doc["image_path"])
+    except Exception:
+        raise HTTPException(status_code=404, detail="Image not found in storage")
+    small = await run_in_threadpool(_downscale_for_ai, content)
+    try:
+        ai = await run_copper_vision(base64.b64encode(small).decode("utf-8"))
+    except Exception as e:
+        logger.exception("Copper re-rate failed")
+        raise HTTPException(status_code=502, detail=f"AI Vision analysis failed: {friendly_ai_error(e)}")
+    cls = copper_class_for(ai.get("classification"))
+    changes = {
+        "classification": cls["code"], "class_label": cls["label"], "group": cls["group"], "color": cls["color"],
+        "description": cls["description"], "severity": cls["severity"], "status": cls["status"],
+        "confidence": _clamp(ai.get("confidence"), 0, 100),
+        "ai_summary": str(ai.get("summary", "")), "recommendation": str(ai.get("recommendation", "")),
+        "edited_at": now_iso(),
+    }
+    await db.copper_tests.update_one({"id": test_id}, {"$set": changes})
+    return CopperRecord(**{**doc, **changes})
+
+
 @api_router.delete("/copper/tests/{test_id}")
 async def copper_delete(test_id: str):
     res = await db.copper_tests.update_one({"id": test_id}, {"$set": {"deleted_at": now_iso()}})
