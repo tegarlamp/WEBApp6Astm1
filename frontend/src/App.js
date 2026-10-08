@@ -44,6 +44,13 @@ import RustHistory from "@/pages/rust/History";
 import RustTrend from "@/pages/rust/Trend";
 import RustResult from "@/pages/rust/Result";
 import RustScale from "@/pages/rust/Scale";
+import SaltLayout from "@/pages/saltspray/SaltLayout";
+import SaltDashboard from "@/pages/saltspray/Dashboard";
+import SaltNewTest from "@/pages/saltspray/NewTest";
+import SaltHistory from "@/pages/saltspray/History";
+import SaltTrend from "@/pages/saltspray/Trend";
+import SaltResult from "@/pages/saltspray/Result";
+import SaltScale from "@/pages/saltspray/Scale";
 
 function App() {
   return (
@@ -98,6 +105,14 @@ function App() {
                 <Route path="grid-scale" element={<RustScale />} />
               </Route>
               <Route path="/rust-preventing/result/:id" element={<RustResult />} />
+              <Route path="/salt-spray" element={<SaltLayout />}>
+                <Route index element={<SaltDashboard />} />
+                <Route path="new" element={<SaltNewTest />} />
+                <Route path="history" element={<SaltHistory />} />
+                <Route path="trend" element={<SaltTrend />} />
+                <Route path="grid-scale" element={<SaltScale />} />
+              </Route>
+              <Route path="/salt-spray/result/:id" element={<SaltResult />} />
               <Route path="/:module" element={<ModulePage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

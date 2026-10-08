@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Outlet, NavLink } from "react-router-dom";
-import { Menu, X, Hexagon, FlaskConical, Beaker, Gauge, LogOut, Timer, ScanLine, ShieldAlert } from "lucide-react";
+import { Menu, X, Hexagon, FlaskConical, Beaker, Gauge, LogOut, Timer, ScanLine, ShieldAlert, CloudDrizzle } from "lucide-react";
 import { Sidebar } from "@/components/Sidebar";
 import GlobalTimerWatcher from "@/components/GlobalTimerWatcher";
 import { MODULE_LIST } from "@/config/modules";
@@ -13,6 +13,7 @@ const ICONS = {
   htcbt: Timer,
   "dka-cec": ScanLine,
   "rust-preventing": ShieldAlert,
+  "salt-spray": CloudDrizzle,
 };
 
 export const Layout = () => {

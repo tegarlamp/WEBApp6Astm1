@@ -2616,6 +2616,542 @@ async def rust_reference_scale():
     return {"title": "ASTM D1748 Rust Preventing 100-Box Scale", "measurement_area": "50 x 50 mm central surface", "plate": "60 x 80 mm; 0.5 mm cross cuts; 100 boxes of 5 x 5 mm", "grades": RUST_GRADES}
 
 
+# MODULE: Salt Spray — ASTM B117 / 100-box metal panel inspection
+# ===========================================================================
+SALT_GRADES = {
+    "A": {"min": 0, "max": 0, "label": "Bersih tanpa karat", "status": "EXCELLENT PASS", "color": "#10B981"},
+    "B": {"min": 1, "max": 10, "label": "Karat ringan", "status": "GOOD / MINOR", "color": "#34D399"},
+    "C": {"min": 11, "max": 25, "label": "Karat sedang", "status": "FAIR / MODERATE", "color": "#FBBF24"},
+    "D": {"min": 26, "max": 50, "label": "Karat luas", "status": "POOR / EXTENSIVE", "color": "#F97316"},
+    "E": {"min": 51, "max": 100, "label": "Karat berat", "status": "REJECT / SEVERE", "color": "#EF4444"},
+}
+
+
+def salt_grade_for(count: int) -> str:
+    n = max(0, min(100, int(count)))
+    for grade, rule in SALT_GRADES.items():
+        if rule["min"] <= n <= rule["max"]:
+            return grade
+    return "E"
+
+
+SALT_PROMPT = """You are an expert metallurgical inspector for Salt Spray ASTM B117.
+
+Analyze the SECOND image: a metal corrosion specimen placed beside or under a transparent measuring plate.
+The measuring plate is 60 x 80 mm, has 0.5 mm cross-cut lines, and creates exactly 100 small boxes in a 10 x 10 grid; each box is 5 x 5 mm. Evaluate ONLY the central 50 x 50 mm measurement surface. Ignore the outer edge area outside the main measuring zone.
+
+COUNTING RULES:
+- Count a box as rusted when at least one naked-eye-visible rust spot is present in that box.
+- If rust crosses a cross-cut line into an adjacent box, count every box touched by the spreading rust.
+- Do not count mere glare, plate reflections, dust, scratches, or the transparent plate itself as rust.
+- Read the 10 rows from top to bottom and each row left to right. If the grid is rotated, mentally normalize it.
+
+GRADE RULES:
+Grade A = 0 rusted boxes; Grade B = 1-10; Grade C = 11-25; Grade D = 26-50; Grade E = 51-100.
+
+Return ONLY valid minified JSON with EXACTLY these keys:
+{"rusted_box_count":<integer 0-100>,"grade":"A|B|C|D|E","confidence":<number 0-100>,"grid_boxes":[<exactly 100 booleans, row-major top-to-bottom>],"grid_corners":[[x,y],[x,y],[x,y],[x,y]],"rust_spread":"<localized|scattered|clustered|widespread|near-total>","summary":"<short Indonesian note describing distribution within the central 50x50 mm area and cross-cut propagation>","recommendation":"<one short Indonesian practical recommendation>"}
+The grid_boxes array is mandatory and its true count MUST equal rusted_box_count. When image quality makes a box ambiguous, count only visible rust and lower confidence.
+grid_corners are the 4 outer corners of the evaluated 10 x 10 box zone (central 50 x 50 mm) in the image as it is displayed, ordered top-left, top-right, bottom-right, bottom-left, each as normalized [x,y] fractions 0-1 of image width/height (x to the right, y downward). Row 1 of grid_boxes is the row between top-left and top-right."""
+
+SALT_FULL_PROMPT = """You are an expert metallurgical inspector for Salt Spray ASTM B117 using the WHOLE-IMAGE method.
+
+Analyze the SECOND image. The ACTIVE ZONE is the ENTIRE image as displayed. Mentally divide the full image into an exact 10 x 10 grid of 100 equal boxes: each box spans 10% of the image width and 10% of the image height. Box 1 is the top-left, box 10 the top-right, box 100 the bottom-right (row-major, top-to-bottom, left-to-right). Do NOT rotate or re-frame the image.
+
+COUNTING RULES:
+- Count a box as rusted when at least one naked-eye-visible rust spot (orange/brown/red-brown corrosion product) is present on the metal test specimen surface inside that box.
+- If rust crosses a box boundary, count every box it touches.
+- Do not count glare, reflections, water droplets, dust, scratches, shadows, or the transparent plate itself as rust.
+- Rust on background equipment that is clearly not part of the test specimen(s) is NOT counted.
+
+GRADE RULES:
+Grade A = 0 rusted boxes; Grade B = 1-10; Grade C = 11-25; Grade D = 26-50; Grade E = 51-100.
+
+Return ONLY valid minified JSON with EXACTLY these keys:
+{"rusted_box_count":<integer 0-100>,"grade":"A|B|C|D|E","confidence":<number 0-100>,"grid_boxes":[<exactly 100 booleans, row-major top-to-bottom>],"specimen_box_count":<integer 0-100, boxes that contain any metal specimen surface>,"rust_spread":"<localized|scattered|clustered|widespread|near-total>","summary":"<short Indonesian note describing rust distribution across the whole image grid and which rows/columns are most affected>","recommendation":"<one short Indonesian practical recommendation>"}
+The grid_boxes array is mandatory and its true count MUST equal rusted_box_count. When a box is ambiguous, count only clearly visible rust and lower confidence."""
+
+FULL_IMAGE_CORNERS = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
+SALT_METHODS = {"zone": "Active Zone 50x50 mm", "full": "Seluruh Gambar"}
+
+SALT_LOCATE_PROMPT = """Locate the evaluated 10 x 10 box measuring zone (central 50 x 50 mm area covered by the transparent ASTM B117 cross-cut measuring plate) on the metal panel in this image.
+Return ONLY minified JSON: {"grid_corners":[[x,y],[x,y],[x,y],[x,y]]}
+Corners ordered top-left, top-right, bottom-right, bottom-left as normalized fractions 0-1 of image width/height (x right, y down)."""
+
+
+def _parse_grid_corners(raw) -> Optional[List[List[float]]]:
+    try:
+        if isinstance(raw, dict):
+            raw = [raw.get(k) for k in ("top_left", "top_right", "bottom_right", "bottom_left")]
+        if isinstance(raw, list) and len(raw) == 4 and all(isinstance(v, (int, float)) for v in raw):
+            x0, y0, x1, y1 = [float(v) for v in raw]  # bbox form
+            raw = [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]
+        vals = []
+        for pt in list(raw)[:4]:
+            if isinstance(pt, dict):
+                pt = [pt.get("x"), pt.get("y")]
+            vals.append((float(pt[0]), float(pt[1])))
+        if len(vals) != 4:
+            return None
+        peak = max(max(abs(x), abs(y)) for x, y in vals)
+        div = 1000.0 if peak > 100 else (100.0 if peak > 1.5 else 1.0)  # 0-1000 / percent / fraction
+        pts = [[round(max(0.0, min(1.0, x / div)), 4), round(max(0.0, min(1.0, y / div)), 4)] for x, y in vals]
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        if max(xs) - min(xs) < 0.05 or max(ys) - min(ys) < 0.05:
+            return None
+        return pts
+    except Exception:
+        return None
+
+
+async def run_salt_locate(image_b64: str) -> Optional[List[List[float]]]:
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=f"rust-locate-{uuid.uuid4()}",
+        system_message="You locate measuring grids in inspection photos and only output JSON.",
+    ).with_model("gemini", "gemini-3.1-pro-preview")
+    parts = []
+    async for event in chat.stream_message(UserMessage(text=SALT_LOCATE_PROMPT, file_contents=[ImageContent(image_base64=image_b64)])):
+        if isinstance(event, TextDelta):
+            parts.append(event.content)
+        elif isinstance(event, StreamDone):
+            break
+    raw_text = "".join(parts)
+    corners = _parse_grid_corners(_parse_ai_json(raw_text).get("grid_corners"))
+    if not corners:
+        logger.warning("Rust grid locate unparsable: %s", raw_text[:300])
+    return corners
+
+
+async def run_salt_vision(image_b64: str, method: str = "zone") -> dict:
+    chat = LlmChat(
+        api_key=EMERGENT_LLM_KEY,
+        session_id=f"rust-d1748-{uuid.uuid4()}",
+        system_message="You are a precise ASTM B117 metal corrosion grid inspector that only outputs JSON.",
+    ).with_model("gemini", "gemini-3.1-pro-preview")
+    parts = []
+    prompt = SALT_FULL_PROMPT if method == "full" else SALT_PROMPT
+    async for event in chat.stream_message(UserMessage(text=prompt, file_contents=[ImageContent(image_base64=image_b64)])):
+        if isinstance(event, TextDelta):
+            parts.append(event.content)
+        elif isinstance(event, StreamDone):
+            break
+    return _parse_ai_json("".join(parts))
+
+
+class SaltMeta(BaseModel):
+    sample_id: str = ""
+    product: str = ""
+    batch: str = ""
+    operator: str = ""
+    exposure_hours: float = 96
+    temperature_c: float = 35
+    humidity_pct: float = 95
+    substrate: str = "Cold Rolled Steel 1018"
+    remark: str = ""
+
+
+class SaltAnalyzeRequest(SaltMeta):
+    image_path: str
+    method: str = "zone"  # zone = Active Zone 50x50 mm, full = seluruh gambar
+
+
+SALT_SNAPSHOT_KEYS = (
+    "rusted_box_count", "grade", "grade_label", "grade_status", "confidence", "grid_boxes", "rust_spread",
+    "ai_summary", "recommendation", "ai_model", "ai_grid_boxes", "ai_rusted_box_count", "ai_grade",
+    "grid_corners", "specimen_box_count", "analyzed_at", "edited", "edited_at",
+)
+
+
+def _salt_norm_method(m: Optional[str]) -> str:
+    return "zone"
+
+
+class SaltRecord(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    image_path: str
+    meta: SaltMeta
+    rusted_box_count: int = 0
+    grade: str = "A"
+    grade_label: str = "Bersih tanpa karat"
+    grade_status: str = "EXCELLENT PASS"
+    confidence: float = 0
+    grid_boxes: List[bool] = Field(default_factory=lambda: [False] * 100)
+    rust_spread: str = "localized"
+    ai_summary: str = ""
+    recommendation: str = ""
+    ai_model: str = "gemini-3.1-pro-preview"
+    # Original AI Vision verdict (never overwritten by grid corrections)
+    ai_grid_boxes: Optional[List[bool]] = None
+    ai_rusted_box_count: Optional[int] = None
+    ai_grade: Optional[str] = None
+    grid_corners: Optional[List[List[float]]] = None
+    # Inspector's own manual assessment (separate from grid correction)
+    inspector_count: Optional[int] = None
+    inspector_grade: Optional[str] = None
+    inspector_name: str = ""
+    inspector_notes: str = ""
+    inspector_at: Optional[str] = None
+    # Assessment method: zone (Active Zone 50x50 mm) | full (seluruh gambar). Top-level fields = active method.
+    method: str = "zone"
+    specimen_box_count: Optional[int] = None
+    analyzed_at: Optional[str] = None
+    method_results: Dict[str, Any] = Field(default_factory=dict)
+    created_at: str = Field(default_factory=now_iso)
+    edited: bool = False
+    edited_at: Optional[str] = None
+    deleted_at: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _fill_ai_original(self):
+        if self.ai_grid_boxes is None:
+            self.ai_grid_boxes = list(self.grid_boxes)
+        if self.ai_rusted_box_count is None:
+            self.ai_rusted_box_count = sum(bool(v) for v in self.ai_grid_boxes)
+        if not self.ai_grade:
+            self.ai_grade = salt_grade_for(self.ai_rusted_box_count)
+        self.method = _salt_norm_method(self.method)
+        if self.method == "full" and not self.grid_corners:
+            self.grid_corners = [list(p) for p in FULL_IMAGE_CORNERS]
+        if not self.analyzed_at:
+            self.analyzed_at = self.created_at
+        if self.method not in self.method_results:
+            self.method_results = {**self.method_results, self.method: _salt_snapshot(self.model_dump(exclude={"method_results"}))}
+        return self
+
+
+class SaltJob(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    status: str = "running"
+    record_id: Optional[str] = None
+    error: Optional[str] = None
+    created_at: str = Field(default_factory=now_iso)
+    finished_at: Optional[str] = None
+
+
+class SaltUpdate(BaseModel):
+    rusted_box_count: Optional[int] = None
+    grid_boxes: Optional[List[bool]] = None
+    ai_summary: Optional[str] = None
+    recommendation: Optional[str] = None
+    inspector_count: Optional[int] = None  # -1 clears the manual assessment
+    inspector_name: Optional[str] = None
+    inspector_notes: Optional[str] = None
+
+
+def _salt_snapshot(d: dict) -> dict:
+    return {k: d.get(k) for k in SALT_SNAPSHOT_KEYS}
+
+
+def _salt_grid_from_ai(ai: dict) -> tuple:
+    raw = ai.get("grid_boxes") if isinstance(ai, dict) else None
+    boxes = []
+    if isinstance(raw, list):
+        for value in raw[:100]:
+            if isinstance(value, bool):
+                boxes.append(value)
+            elif isinstance(value, (int, float)):
+                boxes.append(float(value) > 0)
+            else:
+                boxes.append(str(value).strip().lower() in {"true", "1", "rust", "rusted", "yes"})
+    boxes.extend([False] * (100 - len(boxes)))
+    if len(boxes) == 100 and any(boxes):
+        count = sum(boxes)
+    else:
+        try:
+            count = int(float(ai.get("rusted_box_count", 0)))
+        except (TypeError, ValueError):
+            count = 0
+        count = max(0, min(100, count))
+        boxes = [i < count for i in range(100)]
+    return boxes, sum(boxes)
+
+
+def _salt_result_fields(ai: dict, method: str) -> dict:
+    boxes, count = _salt_grid_from_ai(ai)
+    grade = salt_grade_for(count)
+    rule = SALT_GRADES[grade]
+    corners = [list(p) for p in FULL_IMAGE_CORNERS] if method == "full" else _parse_grid_corners(ai.get("grid_corners"))
+    spec = None
+    if method == "full":
+        try:
+            spec = max(0, min(100, int(float(ai.get("specimen_box_count")))))
+        except (TypeError, ValueError):
+            spec = None
+    return {
+        "rusted_box_count": count, "grade": grade, "grade_label": rule["label"], "grade_status": rule["status"],
+        "confidence": _clamp(ai.get("confidence"), 0, 100), "grid_boxes": boxes, "ai_grid_boxes": list(boxes),
+        "ai_rusted_box_count": count, "ai_grade": grade, "grid_corners": corners, "specimen_box_count": spec,
+        "rust_spread": str(ai.get("rust_spread", "localized")), "ai_summary": str(ai.get("summary", "")),
+        "recommendation": str(ai.get("recommendation", "")), "ai_model": "gemini-3.1-pro-preview",
+        "analyzed_at": now_iso(), "edited": False, "edited_at": None,
+    }
+
+
+def _build_salt_record(req: SaltAnalyzeRequest, ai: dict) -> SaltRecord:
+    method = _salt_norm_method(req.method)
+    fields = _salt_result_fields(ai, method)
+    return SaltRecord(
+        image_path=req.image_path,
+        meta=SaltMeta(**req.model_dump(exclude={"image_path", "method"})),
+        method=method,
+        method_results={method: dict(fields)},
+        **fields,
+    )
+
+
+async def _analyze_rust(req: SaltAnalyzeRequest) -> SaltRecord:
+    try:
+        content, _ = await run_in_threadpool(get_object, req.image_path)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Image not found in storage")
+    small = await run_in_threadpool(_downscale_for_ai, content, 2200)
+    b64 = base64.b64encode(small).decode("utf-8")
+    try:
+        ai = await run_salt_vision(b64, _salt_norm_method(req.method))
+        record = _build_salt_record(req, ai)
+    except Exception as e:
+        logger.exception("Rust B117 AI vision failed")
+        raise HTTPException(status_code=502, detail=f"AI Vision analysis failed: {friendly_ai_error(e)}")
+    await db.salt_tests.insert_one(record.model_dump())
+    return record
+
+
+async def _run_salt_job(job_id: str, req: SaltAnalyzeRequest):
+    try:
+        record = await _analyze_rust(req)
+        await db.salt_jobs.update_one({"id": job_id}, {"$set": {"status": "done", "record_id": record.id, "finished_at": now_iso()}})
+    except HTTPException as e:
+        await db.salt_jobs.update_one({"id": job_id}, {"$set": {"status": "error", "error": str(e.detail), "finished_at": now_iso()}})
+    except Exception as e:
+        logger.exception("rust analyze job failed")
+        await db.salt_jobs.update_one({"id": job_id}, {"$set": {"status": "error", "error": friendly_ai_error(e), "finished_at": now_iso()}})
+
+
+@api_router.post("/salt-spray/analyze/start", response_model=SaltJob)
+async def salt_analyze_start(req: SaltAnalyzeRequest):
+    try:
+        await run_in_threadpool(get_object, req.image_path)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Image not found in storage")
+    job = SaltJob()
+    await db.salt_jobs.insert_one(job.model_dump())
+    asyncio.create_task(_run_salt_job(job.id, req))
+    return job
+
+
+@api_router.get("/salt-spray/analyze/jobs/{job_id}", response_model=SaltJob)
+async def salt_job_status(job_id: str):
+    doc = await db.salt_jobs.find_one({"id": job_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return SaltJob(**doc)
+
+
+@api_router.get("/salt-spray/tests", response_model=List[SaltRecord])
+async def salt_list(q: Optional[str] = None):
+    query: dict = {"deleted_at": None}
+    if q:
+        query["$or"] = [
+            {"meta.sample_id": {"$regex": q, "$options": "i"}},
+            {"meta.product": {"$regex": q, "$options": "i"}},
+            {"meta.batch": {"$regex": q, "$options": "i"}},
+            {"meta.operator": {"$regex": q, "$options": "i"}},
+        ]
+    docs = await db.salt_tests.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return [SaltRecord(**doc) for doc in docs]
+
+
+@api_router.get("/salt-spray/tests/{test_id}", response_model=SaltRecord)
+async def salt_get(test_id: str):
+    doc = await db.salt_tests.find_one({"id": test_id, "deleted_at": None}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Rust inspection not found")
+    return SaltRecord(**doc)
+
+
+@api_router.put("/salt-spray/tests/{test_id}", response_model=SaltRecord)
+async def salt_update(test_id: str, upd: SaltUpdate):
+    doc = await db.salt_tests.find_one({"id": test_id, "deleted_at": None}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Rust inspection not found")
+    changes = upd.model_dump(exclude_none=True)
+    # Freeze the original AI verdict before the first correction (legacy records)
+    if doc.get("ai_grid_boxes") is None:
+        orig = SaltRecord(**doc)
+        changes["ai_grid_boxes"] = orig.ai_grid_boxes
+        changes["ai_rusted_box_count"] = orig.ai_rusted_box_count
+        changes["ai_grade"] = orig.ai_grade
+    inspector_touched = any(k in changes for k in ("inspector_count", "inspector_name", "inspector_notes"))
+    if "inspector_count" in changes:
+        ic = int(changes["inspector_count"])
+        if ic < 0:
+            changes["inspector_count"] = None
+            changes["inspector_grade"] = None
+        else:
+            ic = min(100, ic)
+            changes["inspector_count"] = ic
+            changes["inspector_grade"] = salt_grade_for(ic)
+    if inspector_touched:
+        changes["inspector_at"] = now_iso()
+    if "grid_boxes" in changes:
+        boxes = [bool(v) for v in changes["grid_boxes"][:100]]
+        boxes.extend([False] * (100 - len(boxes)))
+        changes["grid_boxes"] = boxes
+        changes["rusted_box_count"] = sum(boxes)
+    elif "rusted_box_count" in changes:
+        count = max(0, min(100, int(changes["rusted_box_count"])))
+        changes["rusted_box_count"] = count
+        changes["grid_boxes"] = [i < count for i in range(100)]
+    if "rusted_box_count" in changes:
+        grade = salt_grade_for(changes["rusted_box_count"])
+        changes["grade"] = grade
+        changes["grade_label"] = SALT_GRADES[grade]["label"]
+        changes["grade_status"] = SALT_GRADES[grade]["status"]
+    if not changes:
+        return SaltRecord(**doc)
+    result_touched = any(k in changes for k in ("grid_boxes", "rusted_box_count", "ai_summary", "recommendation"))
+    if result_touched:
+        changes["edited"] = True
+        changes["edited_at"] = now_iso()
+    merged = SaltRecord(**{**doc, **changes})
+    changes["method_results"] = {**merged.method_results, merged.method: _salt_snapshot(merged.model_dump(exclude={"method_results"}))}
+    await db.salt_tests.update_one({"id": test_id}, {"$set": changes})
+    updated = await db.salt_tests.find_one({"id": test_id}, {"_id": 0})
+    return SaltRecord(**updated)
+
+
+@api_router.post("/salt-spray/tests/{test_id}/locate-grid", response_model=SaltRecord)
+async def salt_locate_grid(test_id: str):
+    doc = await db.salt_tests.find_one({"id": test_id, "deleted_at": None}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Rust inspection not found")
+    if not (SaltRecord(**doc).method_results.get("zone")):
+        raise HTTPException(status_code=400, detail="Metode Active Zone belum dianalisa untuk inspeksi ini.")
+    try:
+        content, _ = await run_in_threadpool(get_object, doc["image_path"])
+    except Exception:
+        raise HTTPException(status_code=404, detail="Image not found in storage")
+    small = await run_in_threadpool(_downscale_for_ai, content, 2200)
+    try:
+        corners = await run_salt_locate(base64.b64encode(small).decode("utf-8"))
+    except Exception as e:
+        logger.exception("Rust grid locate failed")
+        raise HTTPException(status_code=502, detail=f"AI Vision gagal mendeteksi grid: {friendly_ai_error(e)}")
+    if not corners:
+        raise HTTPException(status_code=422, detail="Posisi grid tidak terdeteksi pada foto.")
+    rec = SaltRecord(**doc)
+    mr = dict(rec.method_results)
+    zone = dict(mr.get("zone") or {})
+    zone["grid_corners"] = corners
+    mr["zone"] = zone
+    sets = {"method_results": mr}
+    if rec.method == "zone":
+        sets["grid_corners"] = corners
+    await db.salt_tests.update_one({"id": test_id}, {"$set": sets})
+    updated = await db.salt_tests.find_one({"id": test_id}, {"_id": 0})
+    return SaltRecord(**updated)
+
+
+class SaltMethodRequest(BaseModel):
+    method: str
+
+
+async def _set_active_salt_method(test_id: str, method: str, new_result: Optional[dict] = None) -> SaltRecord:
+    doc = await db.salt_tests.find_one({"id": test_id, "deleted_at": None}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Rust inspection not found")
+    rec = SaltRecord(**doc)
+    mr = dict(rec.method_results)
+    mr[rec.method] = _salt_snapshot(rec.model_dump(exclude={"method_results"}))  # persist current active
+    if new_result is not None:
+        mr[method] = new_result
+    snap = mr.get(method)
+    if not snap:
+        raise HTTPException(status_code=400, detail=f"Metode {SALT_METHODS.get(method, method)} belum dianalisa. Jalankan analisa terlebih dahulu.")
+    sets = {k: snap.get(k) for k in SALT_SNAPSHOT_KEYS}
+    sets["method"] = method
+    sets["method_results"] = mr
+    await db.salt_tests.update_one({"id": test_id}, {"$set": sets})
+    updated = await db.salt_tests.find_one({"id": test_id}, {"_id": 0})
+    return SaltRecord(**updated)
+
+
+@api_router.put("/salt-spray/tests/{test_id}/method", response_model=SaltRecord)
+async def salt_switch_method(test_id: str, req: SaltMethodRequest):
+    """Make an already-analyzed method the official (active) result."""
+    return await _set_active_salt_method(test_id, _salt_norm_method(req.method))
+
+
+async def _run_salt_method_job(job_id: str, test_id: str, method: str):
+    try:
+        doc = await db.salt_tests.find_one({"id": test_id, "deleted_at": None}, {"_id": 0})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Rust inspection not found")
+        try:
+            content, _ = await run_in_threadpool(get_object, doc["image_path"])
+        except Exception:
+            raise HTTPException(status_code=404, detail="Image not found in storage")
+        small = await run_in_threadpool(_downscale_for_ai, content, 2200)
+        try:
+            ai = await run_salt_vision(base64.b64encode(small).decode("utf-8"), method)
+        except Exception as e:
+            logger.exception("Rust B117 method analysis failed")
+            raise HTTPException(status_code=502, detail=f"AI Vision analysis failed: {friendly_ai_error(e)}")
+        await _set_active_salt_method(test_id, method, _salt_result_fields(ai, method))
+        await db.salt_jobs.update_one({"id": job_id}, {"$set": {"status": "done", "record_id": test_id, "finished_at": now_iso()}})
+    except HTTPException as e:
+        await db.salt_jobs.update_one({"id": job_id}, {"$set": {"status": "error", "error": str(e.detail), "finished_at": now_iso()}})
+    except Exception as e:
+        logger.exception("rust method job failed")
+        await db.salt_jobs.update_one({"id": job_id}, {"$set": {"status": "error", "error": friendly_ai_error(e), "finished_at": now_iso()}})
+
+
+@api_router.post("/salt-spray/tests/{test_id}/method/analyze", response_model=SaltJob)
+async def salt_analyze_method(test_id: str, req: SaltMethodRequest):
+    """(Re)analyze the same photo with the chosen method; the result becomes the active one."""
+    doc = await db.salt_tests.find_one({"id": test_id, "deleted_at": None}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Rust inspection not found")
+    job = SaltJob()
+    await db.salt_jobs.insert_one(job.model_dump())
+    asyncio.create_task(_run_salt_method_job(job.id, test_id, _salt_norm_method(req.method)))
+    return job
+
+
+@api_router.delete("/salt-spray/tests/{test_id}")
+async def salt_delete(test_id: str):
+    res = await db.salt_tests.update_one({"id": test_id}, {"$set": {"deleted_at": now_iso()}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Rust inspection not found")
+    return {"ok": True}
+
+
+@api_router.get("/salt-spray/dashboard")
+async def salt_dashboard():
+    docs = await db.salt_tests.find({"deleted_at": None}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    records = [SaltRecord(**doc) for doc in docs]
+    counts = {grade: 0 for grade in SALT_GRADES}
+    for record in records:
+        counts[record.grade] = counts.get(record.grade, 0) + 1
+    avg = round(sum(r.rusted_box_count for r in records) / len(records), 1) if records else 0
+    return {"latest": records[0].model_dump() if records else None, "total": len(records), "grade_counts": counts, "average_rusted_boxes": avg}
+
+
+@api_router.get("/salt-spray/trend")
+async def salt_trend():
+    docs = await db.salt_tests.find({"deleted_at": None}, {"_id": 0}).sort("created_at", 1).to_list(500)
+    return [{"id": d["id"], "sample_id": d.get("meta", {}).get("sample_id", ""), "rusted_box_count": d.get("rusted_box_count", 0), "grade": d.get("grade", "A"), "created_at": d.get("created_at")} for d in docs]
+
+
+@api_router.get("/salt-spray/reference-scale")
+async def salt_reference_scale():
+    return {"title": "ASTM B117 Salt Spray 100-Box Scale", "measurement_area": "50 x 50 mm central surface", "plate": "60 x 80 mm; 0.5 mm cross cuts; 100 boxes of 5 x 5 mm", "grades": SALT_GRADES}
+
+
 COPPER_SEED = [
     {"sample_id": "CU-2026-05-30-001", "product": "Diesel Fuel B30", "batch": "LOT-CU-0530-A", "operator": "Karis Setia",
      "classification": "1a", "confidence": 97.4,

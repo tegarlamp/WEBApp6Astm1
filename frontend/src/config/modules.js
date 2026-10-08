@@ -81,6 +81,16 @@ export const MODULES = {
     ratingLabel: "Rust Rating",
     parameters: [],
   },
+  "salt-spray": {
+    slug: "salt-spray",
+    title: "Salt Spray ASTM B117",
+    short: "ASTM B117",
+    description:
+      "Inspeksi panel uji salt spray (kabut garam) dengan measuring plate 100 kotak — AI Vision menghitung kotak berkarat pada active zone 50 × 50 mm dan memberi Grade A–E.",
+    ratingOptions: ["Grade A", "Grade B", "Grade C", "Grade D", "Grade E"],
+    ratingLabel: "Rust Rating",
+    parameters: [],
+  },
 };
 
 export const MODULE_LIST = Object.values(MODULES);

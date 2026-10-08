@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import { FlaskConical, Beaker, Gauge, Timer, Hexagon, Circle, Palette, LogOut, UserCircle2, Hourglass, ShieldAlert } from "lucide-react";
+import { FlaskConical, Beaker, Gauge, Timer, Hexagon, Circle, Palette, LogOut, UserCircle2, Hourglass, ShieldAlert, CloudDrizzle } from "lucide-react";
 import { MODULE_LIST } from "@/config/modules";
 import { KHT_TABS } from "@/pages/kht/KhtLayout";
 import { DKA_TABS } from "@/pages/dka/DkaLayout";
@@ -8,6 +8,7 @@ import { COPPER_TABS } from "@/pages/copper/CopperLayout";
 import { HTCBT_TABS } from "@/pages/htcbt/HtcbtLayout";
 import { DKACEC_TABS } from "@/pages/dkacec/DkacecLayout";
 import { RUST_TABS } from "@/pages/rust/RustLayout";
+import { SALT_TABS } from "@/pages/saltspray/SaltLayout";
 import { useAuth } from "@/context/AuthContext";
 
 const ICONS = {
@@ -17,6 +18,7 @@ const ICONS = {
   htcbt: Timer,
   "dka-cec": Hourglass,
   "rust-preventing": ShieldAlert,
+  "salt-spray": CloudDrizzle,
 };
 
 const SUBNAV = {
@@ -26,6 +28,7 @@ const SUBNAV = {
   htcbt: { tabs: HTCBT_TABS, active: "text-amber-400" },
   "dka-cec": { tabs: DKACEC_TABS, active: "text-blue-400" },
   "rust-preventing": { tabs: RUST_TABS, active: "text-amber-400" },
+  "salt-spray": { tabs: SALT_TABS, active: "text-amber-400" },
 };
 
 const SubNav = ({ slug }) => (
