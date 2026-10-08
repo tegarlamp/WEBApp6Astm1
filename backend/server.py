@@ -1626,6 +1626,7 @@ class CopperRecord(BaseModel):
     batch_id: Optional[str] = None
     sample_index: Optional[int] = None
     crop_path: str = ""
+    bbox: Optional[List[float]] = None
     meta: CopperMeta
     classification: str = "1a"
     class_label: str = ""
@@ -1710,8 +1711,11 @@ def _build_copper_batch_records(content: bytes, raw: list, req: CopperBatchAnaly
         cls = copper_class_for(sample.get("classification"))
         try:
             crop_bytes = _crop_bbox(content, sample.get("bbox"), pad=0.008)
+            bx, by, bw, bh = [float(v) for v in sample["bbox"]]
+            bbox = [max(0.0, bx - 0.008), max(0.0, by - 0.008), bw + 0.016, bh + 0.016]
         except Exception:
             crop_bytes = _crop_column(content, i, len(ordered))
+            bbox = [i / len(ordered), 0.0, 1 / len(ordered), 1.0]
         crop_path = ""
         try:
             crop_path = f"{APP_NAME}/copper/batches/{batch_id}/{uuid.uuid4()}.jpg"
@@ -1728,6 +1732,7 @@ def _build_copper_batch_records(content: bytes, raw: list, req: CopperBatchAnaly
                 batch_id=batch_id,
                 sample_index=i + 1,
                 crop_path=crop_path,
+                bbox=bbox,
                 meta=meta,
                 classification=cls["code"],
                 class_label=cls["label"],
@@ -1970,6 +1975,31 @@ async def copper_update(test_id: str, upd: CopperUpdate):
     await db.copper_tests.update_one({"id": test_id}, {"$set": changes})
     doc = await db.copper_tests.find_one({"id": test_id}, {"_id": 0})
     return CopperRecord(**doc)
+
+
+class CopperCropRequest(BaseModel):
+    bbox: List[float]
+
+
+@api_router.put("/copper/tests/{test_id}/crop", response_model=CopperRecord)
+async def copper_recrop(test_id: str, req: CopperCropRequest):
+    doc = await db.copper_tests.find_one({"id": test_id, "deleted_at": None}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Test not found")
+    if len(req.bbox) != 4:
+        raise HTTPException(status_code=400, detail="bbox harus [x,y,w,h]")
+    x, y, w, h = [max(0.0, min(1.0, float(v))) for v in req.bbox]
+    w, h = min(w, 1 - x), min(h, 1 - y)
+    try:
+        content, _ = await run_in_threadpool(get_object, doc["image_path"])
+        crop_bytes = await run_in_threadpool(_crop_bbox, content, [x, y, w, h], 0.0)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Area crop terlalu kecil")
+    path = f"{APP_NAME}/copper/crops/{test_id}/{uuid.uuid4()}.jpg"
+    await run_in_threadpool(put_object, path, crop_bytes, "image/jpeg")
+    changes = {"crop_path": path, "bbox": [x, y, w, h], "edited": True, "edited_at": now_iso()}
+    await db.copper_tests.update_one({"id": test_id}, {"$set": changes})
+    return CopperRecord(**{**doc, **changes})
 
 
 @api_router.delete("/copper/tests/{test_id}")

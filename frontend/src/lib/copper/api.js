@@ -219,3 +219,15 @@ export function defaultBatchId() {
   const p = (n) => String(n).padStart(2, "0");
   return `CU-BATCH-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${Math.floor(Math.random() * 900) + 100}`;
 }
+
+export function useRecropCopper() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, bbox }) => {
+      const res = await fetch(`${COPPER}/tests/${id}/crop`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bbox }) });
+      if (!res.ok) throw new Error((await res.text()) || `Crop failed: ${res.status}`);
+      return res.json();
+    },
+    onSuccess: () => invalidate(qc),
+  });
+}

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { FileDown, Loader2, Trash2 } from "lucide-react";
+import { Crop, FileDown, Loader2, Trash2 } from "lucide-react";
+import CropEditor from "@/components/copper/CropEditor";
 import { toast } from "sonner";
 import { fileUrl, useCopperBatch, useDeleteCopperBatch, useUpdateCopper } from "@/lib/copper/api";
 import { fmtDateTime } from "@/lib/kht/format";
@@ -10,11 +11,16 @@ import { AmberBtn, CopperClassGauge, CopperClassPicker } from "@/components/copp
 
 const SampleEditor = ({ sample, busy, onClassification, onSaveId, onDraft }) => {
   const [sid, setSid] = useState(sample.meta?.sample_id || "");
+  const [cropping, setCropping] = useState(false);
   useEffect(() => { setSid(sample.meta?.sample_id || ""); }, [sample.meta?.sample_id]);
   return (
     <Card data-testid={`copper-batch-sample-${sample.sample_index}`}>
       <div className="flex gap-4">
-        <img src={fileUrl(sample.crop_path || sample.image_path, 400)} alt={`sample ${sample.sample_index}`} className="h-36 w-28 shrink-0 rounded-lg border border-zinc-700 bg-zinc-800 object-contain" />
+        <div className="flex shrink-0 flex-col gap-1">
+          <img src={fileUrl(sample.crop_path || sample.image_path, 400)} alt={`sample ${sample.sample_index}`} data-testid={`copper-batch-crop-img-${sample.sample_index}`} className="h-36 w-28 rounded-lg border border-zinc-700 bg-zinc-800 object-contain" />
+          <button type="button" onClick={() => setCropping(true)} data-testid={`copper-batch-crop-btn-${sample.sample_index}`} className="flex items-center justify-center gap-1 rounded-md border border-amber-500/60 py-1 font-mono text-[10px] font-bold tracking-widest text-amber-400 hover:bg-amber-500/10"><Crop className="h-3 w-3" />ATUR CROP</button>
+        </div>
+        {cropping && <CropEditor sample={sample} onClose={() => setCropping(false)} />}
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="font-mono text-[10px] tracking-widest text-amber-400">SAMPLE #{sample.sample_index}</span>
           <span className="mt-1 font-mono text-[11px] text-zinc-300">Sample ID (OCR)</span>
